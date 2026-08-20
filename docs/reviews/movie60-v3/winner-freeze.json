@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "selection_status": "frozen_before_proxy_holdout_replay",
+  "selected_strategy": "movie60@3.2.0",
+  "strategy_sha256": "da4d379db38cf8c028cb4f0d4bed2663480e96d89da9a73a20fce563b5ff27d7",
+  "selection_priority": [
+    "cd_recall",
+    "ab_cd_agreement",
+    "exact_grade_accuracy",
+    "macro_f1",
+    "task_top1_hit_rate"
+  ],
+  "development_results_sha256": "2f8be02d52984cbb4e1cd1aaaf7191e8077d542b195cb0848eae5afc77e20f6a",
+  "split_manifest_sha256": "53b14567e9f34682ca43a5aa8236b23c5b8a96dc0f41b097651c791fa05983c6",
+  "label_provenance": "human_screened_large_model_proxy_not_human_ground_truth",
+  "independent_human_validation": false
+}

@@ -4,9 +4,11 @@ from pathlib import Path
 
 from PIL import Image
 
+from retarget_agent.agents import AgentMode, RouteAction, RouteDecision
 from retarget_agent.models import (
     AnalysisArtifact,
     ArtifactRef,
+    ProxyGrade,
     Rect,
     RegionKind,
     RegionRecord,
@@ -17,6 +19,7 @@ from retarget_agent.rule_anchored_review import (
     RuleAgentPairReview,
     build_rule_agent_pair_sheet,
     decide_rule_anchored_candidate,
+    derive_agent_challenger_ids,
 )
 from retarget_agent.strategy import load_strategy_bundle
 from retarget_agent.strict_review import DimensionReview, MachineGrade, StrictCandidateReview
@@ -129,6 +132,48 @@ def test_override_metric_tolerance_is_loaded_from_strategy() -> None:
     assert decision.agent_overrode_rule
 
 
+def test_combined_grade_can_use_selected_candidate_rule_metric() -> None:
+    policy = load_strategy_bundle(
+        Path(__file__).resolve().parents[1] / "strategies/movie60/v3_2/bundle.yaml"
+    ).override.model_copy(
+        update={
+            "combined_grade_source": "rule_metric",
+            "require_agent_grade_improvement": False,
+            "allow_agent_downgrade": True,
+        }
+    )
+    decision = _decision(
+        agent_review=_review(MachineGrade.C),
+        agent_metrics={
+            "proxy_grade": "proxy_b",
+            "quality_score": 75.0,
+            "ocr_character_recall": 0.9,
+            "person_count_preservation": 1.0,
+        },
+        override_policy=policy,
+    )
+
+    assert decision.agent_overrode_rule
+    assert decision.agent_grade is MachineGrade.C
+    assert decision.selected_grade is MachineGrade.C
+    assert decision.combined_grade is MachineGrade.B
+    assert decision.combined_grade_source == "rule_metric"
+    assert decision.selected_directly_usable
+    assert not decision.request_external_aigc
+
+
+def test_advisory_only_agent_never_overrides_rule() -> None:
+    policy = load_strategy_bundle(
+        Path(__file__).resolve().parents[1] / "strategies/movie60/v3_2/bundle.yaml"
+    ).override.model_copy(update={"agent_selection_mode": "advisory_only"})
+
+    decision = _decision(override_policy=policy)
+
+    assert not decision.agent_overrode_rule
+    assert decision.selected_candidate_id == "rule"
+    assert "agent_advisory_only" in decision.override_block_reasons
+
+
 def test_conflicting_or_non_decisive_pair_falls_back_to_rule() -> None:
     conflict = _decision(pair_review=_pair(consistent=False))
     tie = _decision(pair_review=_pair(preferred=PairPreference.TIE, clear=False))
@@ -150,6 +195,37 @@ def test_same_candidate_is_reviewed_but_never_counted_as_override() -> None:
 
     assert decision.reviewed_candidate_ids == ("rule",)
     assert not decision.agent_overrode_rule
+
+
+def test_two_challengers_follow_explicit_then_complete_agent_ranking() -> None:
+    overview = RouteDecision(
+        decision_id="decision-1",
+        task_id="task-1",
+        mode=AgentMode.ALWAYS_ON,
+        selected_candidate_id="candidate-3",
+        deterministic_candidate_id="candidate-1",
+        deterministic_ranking=("candidate-1", "candidate-2", "candidate-3", "candidate-4"),
+        candidate_ranking=("candidate-3", "candidate-4", "candidate-1", "candidate-2"),
+        proxy_grade=ProxyGrade.B,
+        agent_challenger_candidate_id="candidate-4",
+        agent_called=True,
+        route_action=RouteAction.USE_TRADITIONAL,
+    )
+
+    assert derive_agent_challenger_ids(overview, max_challengers=2) == (
+        "candidate-4",
+        "candidate-3",
+    )
+    assert derive_agent_challenger_ids(
+        overview,
+        max_challengers=2,
+        candidate_sha256_by_id={
+            "candidate-1": "same",
+            "candidate-2": "unique-2",
+            "candidate-3": "unique-3",
+            "candidate-4": "same",
+        },
+    ) == ("candidate-3", "candidate-2")
 
 
 def test_pair_sheet_includes_eight_balanced_text_person_product_crops(tmp_path: Path) -> None:

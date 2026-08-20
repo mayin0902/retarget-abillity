@@ -11,6 +11,21 @@ from .hashing import sha256_file
 from .models import FrozenModel, validate_id
 
 
+class AgentCaseKnowledge(FrozenModel):
+    """General visual precedent; sample IDs and per-image answers are forbidden by policy."""
+
+    case_id: str
+    situation: str = Field(min_length=1, max_length=240)
+    expected_judgement: str = Field(min_length=1, max_length=240)
+    rationale: str = Field(min_length=1, max_length=320)
+    counterexample: str | None = Field(default=None, max_length=240)
+
+    @field_validator("case_id")
+    @classmethod
+    def valid_case_id(cls, value: str) -> str:
+        return validate_id(value)
+
+
 class AgentSkill(FrozenModel):
     schema_version: str = "1.0"
     skill_id: str
@@ -20,6 +35,7 @@ class AgentSkill(FrozenModel):
     ranking_priority: tuple[str, ...] = Field(min_length=1, max_length=12)
     aigc_gate: tuple[str, ...] = Field(min_length=1, max_length=12)
     allowed_reason_codes: tuple[str, ...] = Field(min_length=1, max_length=40)
+    case_knowledge: tuple[AgentCaseKnowledge, ...] = Field(default=(), max_length=24)
 
     @field_validator("skill_id")
     @classmethod
@@ -44,6 +60,16 @@ class AgentSkill(FrozenModel):
         for title, entries in sections:
             lines.append(f"{title}:")
             lines.extend(f"- {entry}" for entry in entries)
+        if self.case_knowledge:
+            lines.append("General case knowledge:")
+            for case in self.case_knowledge:
+                text = (
+                    f"- {case.case_id}: situation={case.situation}; "
+                    f"judgement={case.expected_judgement}; rationale={case.rationale}"
+                )
+                if case.counterexample:
+                    text += f"; counterexample={case.counterexample}"
+                lines.append(text)
         return "\n".join(lines)
 
 
@@ -65,4 +91,9 @@ def load_agent_skill(path: Path) -> LoadedAgentSkill:
     )
 
 
-__all__ = ["AgentSkill", "LoadedAgentSkill", "load_agent_skill"]
+__all__ = [
+    "AgentCaseKnowledge",
+    "AgentSkill",
+    "LoadedAgentSkill",
+    "load_agent_skill",
+]

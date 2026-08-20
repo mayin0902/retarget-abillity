@@ -27,7 +27,7 @@ runs/poster-001-square-v1/
   "D:\images\source.jpg" `
   "D:\images\candidate.jpg" `
   --output-dir "local_data\scores\poster-001" `
-  --strategy strategies\movie60\v2_1\bundle.yaml
+  --strategy strategies\movie60\v3_2_2\bundle.yaml
 ```
 
 输出 `report.json`、`report.md`、`overlay.png`、输入副本和策略快照。
@@ -38,7 +38,7 @@ runs/poster-001-square-v1/
 .\.venv\Scripts\retarget-engine.exe score standalone `
   "D:\images\candidate.jpg" `
   --output-dir "local_data\scores\candidate-only" `
-  --strategy strategies\movie60\v2_1\bundle.yaml
+  --strategy strategies\movie60\v3_2_2\bundle.yaml
 ```
 
 此模式不计算内容保留和 A/B/C/D。
@@ -62,7 +62,7 @@ runs/poster-001-square-v1/
 .\.venv\Scripts\retarget-engine.exe run generate local_data\datasets\my-batch\run.yaml
 .\.venv\Scripts\retarget-engine.exe evaluate runs\my-batch-run `
   --evaluation-id my-batch-rule-v2-1 `
-  --strategy strategies\movie60\v2_1\bundle.yaml
+  --strategy strategies\movie60\v3_2_2\bundle.yaml
 ```
 
 每个 Task、每个候选都有独立 JSON；部分失败不会缩小分母或覆盖成功候选。
@@ -78,7 +78,7 @@ Agent 需要内部 OpenAI-compatible 视觉端点：
   --mode always_on_agent `
   --backend-url "http://127.0.0.1:8000/v1" `
   --model "<内部模型ID>" `
-  --strategy strategies\movie60\v2_1\bundle.yaml
+  --strategy strategies\movie60\v3_2_2\bundle.yaml
 ```
 
 ```powershell

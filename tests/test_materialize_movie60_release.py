@@ -14,11 +14,11 @@ def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _assets(tmp_path: Path) -> Path:
+def _assets(tmp_path: Path, release_version: str = "v1") -> Path:
     assets = tmp_path / "assets"
     assets.mkdir()
-    core = assets / "movie60-handoff-v1-core.zip"
-    evidence = assets / "movie60-handoff-v1-evidence.zip"
+    core = assets / f"movie60-handoff-{release_version}-core.zip"
+    evidence = assets / f"movie60-handoff-{release_version}-evidence.zip"
     with zipfile.ZipFile(core, "w") as archive:
         archive.writestr("movie60-review/README.md", "review")
         archive.writestr("movie60-review/all60/source.jpg", b"source")
@@ -39,6 +39,21 @@ def test_materializer_verifies_and_merges_two_release_archives(tmp_path: Path) -
     assert (output / "all60" / "candidate.jpg").read_bytes() == b"candidate"
     with pytest.raises(FileExistsError):
         verify_and_materialize(tmp_path / "assets", output)
+
+
+def test_v2_asset_names_are_independent_from_immutable_v1(tmp_path: Path) -> None:
+    output = tmp_path / "movie60-v2"
+
+    verify_and_materialize(
+        _assets(tmp_path, "v2"),
+        output,
+        release_version="v2",
+    )
+
+    assert (output / "README.md").is_file()
+    assert materialize_movie60_release.asset_names("v1") != (
+        materialize_movie60_release.asset_names("v2")
+    )
 
 
 def test_materializer_rejects_hash_mismatch(tmp_path: Path) -> None:

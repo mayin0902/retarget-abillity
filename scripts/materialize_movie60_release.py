@@ -15,6 +15,16 @@ ASSETS = (
 )
 
 
+def asset_names(release_version: str) -> tuple[str, str, str]:
+    if not release_version.startswith("v") or not release_version[1:].isdigit():
+        raise ValueError("release_version must look like v1 or v2")
+    return (
+        f"movie60-handoff-{release_version}-core.zip",
+        f"movie60-handoff-{release_version}-evidence.zip",
+        "SHA256SUMS.txt",
+    )
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -46,16 +56,22 @@ def _safe_members(archive: zipfile.ZipFile) -> tuple[zipfile.ZipInfo, ...]:
     return members
 
 
-def verify_and_materialize(asset_dir: Path, output_dir: Path) -> Path:
+def verify_and_materialize(
+    asset_dir: Path,
+    output_dir: Path,
+    *,
+    release_version: str = "v1",
+) -> Path:
     asset_dir = asset_dir.resolve()
     output_dir = output_dir.resolve()
     if output_dir.exists():
         raise FileExistsError(output_dir)
-    for name in ASSETS:
+    assets = asset_names(release_version)
+    for name in assets:
         if not (asset_dir / name).is_file():
             raise FileNotFoundError(asset_dir / name)
     expected = _expected_hashes(asset_dir / "SHA256SUMS.txt")
-    for name in ASSETS[:2]:
+    for name in assets[:2]:
         actual = _sha256(asset_dir / name)
         if expected.get(name) != actual:
             raise ValueError(f"SHA-256 mismatch for {name}")
@@ -64,7 +80,7 @@ def verify_and_materialize(asset_dir: Path, output_dir: Path) -> Path:
     with tempfile.TemporaryDirectory(prefix="movie60-extract-", dir=output_dir.parent) as temp:
         extracted = Path(temp) / "extracted"
         extracted.mkdir()
-        for name in ASSETS[:2]:
+        for name in assets[:2]:
             with zipfile.ZipFile(asset_dir / name) as archive:
                 bad = archive.testzip()
                 if bad is not None:
@@ -77,7 +93,13 @@ def verify_and_materialize(asset_dir: Path, output_dir: Path) -> Path:
     return output_dir
 
 
-def download_release(repo: str, tag: str, destination: Path) -> None:
+def download_release(
+    repo: str,
+    tag: str,
+    destination: Path,
+    *,
+    release_version: str = "v1",
+) -> None:
     destination.mkdir(parents=True, exist_ok=False)
     command = [
         "gh",
@@ -89,7 +111,7 @@ def download_release(repo: str, tag: str, destination: Path) -> None:
         "--dir",
         str(destination),
     ]
-    for name in ASSETS:
+    for name in asset_names(release_version):
         command.extend(("--pattern", name))
     subprocess.run(command, check=True)
 
@@ -100,6 +122,7 @@ def materialize_release(
     output_dir: Path,
     *,
     asset_dir: Path | None = None,
+    release_version: str = "v1",
 ) -> Path:
     """Fail before network I/O when the immutable output already exists."""
 
@@ -107,11 +130,19 @@ def materialize_release(
     if output_dir.exists():
         raise FileExistsError(output_dir)
     if asset_dir is not None:
-        return verify_and_materialize(asset_dir, output_dir)
+        return verify_and_materialize(
+            asset_dir,
+            output_dir,
+            release_version=release_version,
+        )
     with tempfile.TemporaryDirectory(prefix="movie60-release-") as temp:
         downloaded = Path(temp) / "assets"
-        download_release(repo, tag, downloaded)
-        return verify_and_materialize(downloaded, output_dir)
+        download_release(repo, tag, downloaded, release_version=release_version)
+        return verify_and_materialize(
+            downloaded,
+            output_dir,
+            release_version=release_version,
+        )
 
 
 def main() -> None:
@@ -120,6 +151,7 @@ def main() -> None:
     )
     parser.add_argument("--repo", default="mayin0902/retarget-abillity")
     parser.add_argument("--tag", default="movie60-review-v1")
+    parser.add_argument("--release-version", default="v1")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -136,6 +168,7 @@ def main() -> None:
         args.tag,
         args.output_dir,
         asset_dir=args.asset_dir,
+        release_version=args.release_version,
     )
     print(output)
 

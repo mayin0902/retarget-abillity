@@ -89,13 +89,16 @@ benchmarks/          路线级汇总
 给私有仓库协作者传图片时，运行：
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\package_movie60_release.py
+.\.venv\Scripts\python.exe scripts\package_movie60_release.py `
+  --release-version v2 `
+  --workspace local_data\movie60-review-v1 `
+  --output-dir local_data\release-assets\movie60-review-v2
 ```
 
 脚本严格校验60个任务和七方法集合，并生成同一个版本的两个Release资产：
 
-- `movie60-handoff-v1-core.zip`：60原图、420候选、数据元数据、机器JSON理由和人工表；
-- `movie60-handoff-v1-evidence.zip`：高清拼图、候选局部、Rule/Agent对照和AIGC图像证据；
+- `movie60-handoff-v2-core.zip`：60原图、420候选、数据元数据、机器JSON理由、人工表、不可变策略和v3报告；
+- `movie60-handoff-v2-evidence.zip`：高清拼图、候选局部、Rule/Agent对照和AIGC图像证据；
 - `SHA256SUMS.txt`：两个资产的SHA-256。
 
 两包解压到同一父目录后合并为一个 `movie60-review/`。Release必须保持私有，只允许仓库协作者
@@ -106,8 +109,9 @@ benchmarks/          路线级汇总
 ```powershell
 .\.venv\Scripts\python.exe scripts\materialize_movie60_release.py `
   --repo mayin0902/retarget-abillity `
-  --tag movie60-review-v1 `
-  --output-dir local_data\movie60-review-v1
+  --tag movie60-review-v2 `
+  --release-version v2 `
+  --output-dir local_data\movie60-review-v2
 ```
 
 脚本会校验 SHA-256、ZIP CRC、路径穿越和唯一根目录，并拒绝覆盖已有结果。

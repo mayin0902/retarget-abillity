@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0 - 2026-08-21
+
+- Add immutable Movie60 v3, v3.1 and v3.2 scoring, Prompt, Skill and override bundles while
+  retaining v1/v2/v2.1 hashes and Run snapshots.
+- Add human-screened-proxy scoring with transparent soft penalties and declarative scene/method
+  gates; task IDs and filenames cannot participate in policy matching.
+- Add frozen-metric Strategy Replay, label-free 45/15 task splitting, five-fold development
+  diagnostics, C/D recall, ordinal ranking and same-grade tolerance reports.
+- Force Rule Top1 into high-resolution review, allow up to two visually distinct Agent
+  challengers, and persist separate Rule, Agent and Combined grades, confidence and evidence.
+- Add v3.2.1 grading-only replay and v3.2.2 deployment freeze: Rule remains the final selector
+  while the visual Agent supplies auditable advisory evidence after the proxy holdout rejected
+  automatic Agent overrides.
+- Add v2 private Release asset names and curated v3 Agent evidence without overwriting v1.
+
 ## 0.4.0 - 2026-08-20
 
 - Add allowlisted registries for detector suites, reference/no-reference scorers, selectors and

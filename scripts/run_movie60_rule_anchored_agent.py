@@ -16,9 +16,26 @@ from retarget_agent.storage import LocalArtifactStore
 from retarget_agent.strategy import load_strategy_bundle
 
 
-def _task_ids(run_dir: Path, phase: str) -> tuple[str, ...]:
+def _task_ids(run_dir: Path, phase: str, task_ids_file: Path | None) -> tuple[str, ...]:
     store = LocalArtifactStore(run_dir.resolve())
     run = RunManifest.model_validate(store.read_json("run.json"))
+    if task_ids_file is not None:
+        raw = json.loads(task_ids_file.read_text(encoding="utf-8"))
+        if isinstance(raw, dict) and "records" in raw:
+            values = [
+                item["task_id"]
+                for item in raw["records"]
+                if item.get("partition") == phase
+            ]
+        else:
+            values = raw["task_ids"] if isinstance(raw, dict) else raw
+        task_ids = tuple(str(item) for item in values)
+        if not task_ids or len(task_ids) != len(set(task_ids)):
+            raise ValueError("task IDs file must contain a non-empty unique list")
+        unknown = sorted(set(task_ids) - set(run.task_ids))
+        if unknown:
+            raise ValueError(f"task IDs file contains unknown IDs: {unknown}")
+        return task_ids
     return tuple(
         task_id
         for task_id in run.task_ids
@@ -34,7 +51,12 @@ def main() -> None:
     for subparser in (overview, review):
         subparser.add_argument("run_dir", type=Path)
         subparser.add_argument("--evaluation-id", required=True)
-        subparser.add_argument("--phase", choices=("calibration", "validation"), required=True)
+        subparser.add_argument(
+            "--phase",
+            choices=("calibration", "validation", "development", "proxy_holdout"),
+            required=True,
+        )
+        subparser.add_argument("--task-ids-file", type=Path)
         subparser.add_argument("--backend-url", required=True)
         subparser.add_argument("--model", required=True)
         subparser.add_argument("--strategy", type=Path, required=True)
@@ -48,13 +70,18 @@ def main() -> None:
     run_dir = args.run_dir.resolve()
     strategy = load_strategy_bundle(args.strategy)
     plugins = built_in_plugin_catalog()
-    tasks = _task_ids(run_dir, args.phase)
+    tasks = _task_ids(run_dir, args.phase, args.task_ids_file)
+    strategy_cache_key = strategy.source_sha256[:12]
     if args.command == "overview":
         backend = plugins.agent_backends.get(strategy.bundle.agent_backend_plugin)(
             base_url=args.backend_url,
             model_version=args.model,
             timeout_seconds=args.timeout_seconds,
-            cache_path=run_dir / "agent-cache" / "overview-rule-aware-qwen4-v4.json",
+            cache_path=(
+                run_dir
+                / "agent-cache"
+                / f"overview-rule-aware-{strategy_cache_key}.json"
+            ),
             skill=strategy.agent_skill,
             skill_sha256=strategy.file_hashes[strategy.bundle.agent_skill],
             prompt_template=(strategy.prompts.overview if strategy.prompts else None),
@@ -84,8 +111,16 @@ def main() -> None:
             base_url=args.backend_url,
             model_version=args.model,
             timeout_seconds=args.timeout_seconds,
-            candidate_cache_path=(run_dir / "agent-cache" / "strict-rule-anchor-qwen4-v4.json"),
-            pair_cache_path=run_dir / "agent-cache" / "pair-rule-anchor-qwen4-v4.json",
+            candidate_cache_path=(
+                run_dir
+                / "agent-cache"
+                / f"strict-rule-anchor-{strategy_cache_key}.json"
+            ),
+            pair_cache_path=(
+                run_dir
+                / "agent-cache"
+                / f"pair-rule-anchor-{strategy_cache_key}.json"
+            ),
             strict_prompt_template=(
                 strategy.prompts.strict_candidate if strategy.prompts else None
             ),

@@ -54,6 +54,7 @@ def built_in_plugin_catalog() -> PluginCatalog:
 
     from .agents import OpenAICompatibleVisionBackend, deterministic_ranking
     from .evaluation import compute_proxy_metrics
+    from .human_aligned_scoring import compute_human_aligned_metrics
     from .image_scoring import (
         OpenAICompatibleImageReviewBackend,
         compute_no_reference_metrics,
@@ -67,20 +68,13 @@ def built_in_plugin_catalog() -> PluginCatalog:
     catalog.detector_suites.register("legacy_opencv_v1", ProtectionDetectorSuite)
     catalog.detector_suites.register("company_cpu_v2", CompanyCpuProtectionDetectorSuite)
     catalog.reference_scorers.register("auto_proxy_v1", compute_proxy_metrics)
-    catalog.standalone_scorers.register(
-        "technical_no_reference_v1", compute_no_reference_metrics
-    )
+    catalog.reference_scorers.register("human_aligned_proxy_v3", compute_human_aligned_metrics)
+    catalog.standalone_scorers.register("technical_no_reference_v1", compute_no_reference_metrics)
     catalog.selectors.register("technical_risk_v1", select_by_technical_risk)
     catalog.selectors.register("deterministic_rule_ranking_v1", deterministic_ranking)
-    catalog.agent_backends.register(
-        "openai_compatible_vision_v1", OpenAICompatibleVisionBackend
-    )
-    catalog.agent_backends.register(
-        "openai_compatible_strict_review_v1", StrictVisionReviewBackend
-    )
-    catalog.agent_backends.register(
-        "rule_anchored_pair_review_v1", QwenRuleAnchoredReviewAdapter
-    )
+    catalog.agent_backends.register("openai_compatible_vision_v1", OpenAICompatibleVisionBackend)
+    catalog.agent_backends.register("openai_compatible_strict_review_v1", StrictVisionReviewBackend)
+    catalog.agent_backends.register("rule_anchored_pair_review_v1", QwenRuleAnchoredReviewAdapter)
     catalog.agent_backends.register(
         "openai_compatible_image_review_v1", OpenAICompatibleImageReviewBackend
     )

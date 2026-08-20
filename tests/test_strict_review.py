@@ -367,3 +367,18 @@ def test_direct_warp_evidence_caps_visual_under_call_at_c() -> None:
     assert not capped.directly_usable
     assert capped.subject.grade is MachineGrade.C
     assert "global_stretch" in capped.subject.reason_codes
+
+
+def test_direct_warp_evidence_makes_na_subject_applicable_instead_of_crashing() -> None:
+    visual = review(MachineGrade.A).model_copy(
+        update={"subject": dimension(MachineGrade.NA)}
+    )
+
+    capped = _apply_evidence_grade_caps(
+        visual,
+        {"method_id": "direct_warp", "direct_warp_d_stretch": 0.2},
+    )
+
+    assert capped.overall_grade is MachineGrade.B
+    assert capped.subject.applicable
+    assert capped.subject.grade is MachineGrade.B

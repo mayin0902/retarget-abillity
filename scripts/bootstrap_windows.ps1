@@ -21,7 +21,7 @@ $Required = @(
     'requirements\constraints-py311-313.txt',
     'strategies\movie60\v1\bundle.yaml',
     'strategies\movie60\v2\bundle.yaml',
-    'strategies\movie60\v2_1\bundle.yaml',
+    'strategies\movie60\v3_2_2\bundle.yaml',
     'datasets\analyzer_models_v1\model_manifest.csv'
 )
 $Missing = $Required | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) }
@@ -60,7 +60,7 @@ $Pip = @($Python, '-m', 'pip')
 & $Python scripts\materialize_company_models.py
 & $Cli strategy show strategies\movie60\v1\bundle.yaml
 & $Cli strategy show strategies\movie60\v2\bundle.yaml
-& $Cli strategy show strategies\movie60\v2_1\bundle.yaml
+& $Cli strategy show strategies\movie60\v3_2_2\bundle.yaml
 & $Python -m pytest -q tests\test_strategy.py tests\test_single_image_workflow_tools.py
 
 if ($WithMovie60Release) {
