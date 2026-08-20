@@ -98,6 +98,9 @@ def _collect(workspace: Path, repository: Path) -> tuple[list[Entry], list[Entry
         "aigc-status.csv",
     ):
         _add_file(core, focus20 / name, Path("focus20") / name, "review")
+    reports = workspace / "reports"
+    if reports.is_dir():
+        _add_tree(core, reports, Path("reports"), "human-review-reports")
 
     documentation = {
         repository / "docs" / "DATA_AND_RESULTS.md": Path("documentation/DATA_AND_RESULTS.md"),

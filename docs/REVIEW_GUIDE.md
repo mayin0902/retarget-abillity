@@ -72,3 +72,18 @@ local_data/movie60-review-v1/start-review.bat
 浏览器打开 `http://127.0.0.1:8766`。完整60张结果写入
 `local_data/movie60-review-v1/all60/candidate-review.csv`，重点20张写入
 `local_data/movie60-review-v1/focus20/review.csv`。同一Reviewer ID可断点续评。
+
+## 8. 冻结阶段性报告
+
+评审表会持续增量更新；需要讨论或交接时，应生成一个新ID的不可变阶段快照：
+
+```powershell
+.venv\Scripts\python.exe scripts\report_movie60_human_reviews.py `
+  local_data\movie60-review-v1 `
+  --report-id human-v1-10tasks-20260820
+```
+
+输出位于 `local_data/movie60-review-v1/reports/<report-id>/`，包含原始已评候选快照、来源
+SHA256、A/B/C/D分布、A+B通过率、异级排序准确率、同级机器分差和并列Top1。目录已存在时
+命令会拒绝覆盖；后续新增人工评分应换新ID，不修改旧报告。未完成60张前，报告必须标为阶段性
+诊断，不能称为最终准确率。
