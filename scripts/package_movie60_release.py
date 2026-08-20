@@ -105,7 +105,12 @@ def _collect(workspace: Path, repository: Path) -> tuple[list[Entry], list[Entry
     documentation = {
         repository / "docs" / "DATA_AND_RESULTS.md": Path("documentation/DATA_AND_RESULTS.md"),
         repository / "docs" / "REVIEW_GUIDE.md": Path("documentation/REVIEW_GUIDE.md"),
-        repository / "docs" / "SCORING.md": Path("documentation/SCORING.md"),
+        repository / "docs" / "HANDOFF_DETAILED_GUIDE.md": Path(
+            "documentation/HANDOFF_DETAILED_GUIDE.md"
+        ),
+        repository / "docs" / "PLUGIN_STRATEGY_GUIDE.md": Path(
+            "documentation/PLUGIN_STRATEGY_GUIDE.md"
+        ),
         repository / "docs" / "reports" / "MOVIE60_STRICT_END_TO_END_REPORT.md": Path(
             "documentation/MOVIE60_TECHNICAL_REPORT.md"
         ),

@@ -70,4 +70,4 @@ if ($WithMovie60Release) {
 Write-Host ''
 Write-Host 'Bootstrap completed.' -ForegroundColor Green
 Write-Host "Python: $Python"
-Write-Host 'Next: docs\START_HERE.md'
+Write-Host 'Next: docs\README.md'
