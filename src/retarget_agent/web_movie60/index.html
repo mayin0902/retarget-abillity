@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Movie60 · 人工质量评审</title>
+    <link rel="stylesheet" href="/assets/app.css">
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <strong>Movie60</strong>
+        <span>人工质量评审</span>
+      </div>
+
+      <section class="side-section">
+        <label for="reviewer-id">评审者 ID</label>
+        <div class="inline-input">
+          <input id="reviewer-id" value="local-reviewer" pattern="[a-z0-9][a-z0-9_-]*">
+          <button id="reload" class="button secondary" type="button">载入</button>
+        </div>
+        <p class="help">同一ID可以断点继续；评分会写回当前工作区CSV。</p>
+      </section>
+
+      <section class="side-section">
+        <span class="section-label">评审范围</span>
+        <div class="mode-switch">
+          <button class="mode-button active" data-mode="all60" type="button">
+            <strong>完整 60 张</strong><span>7候选逐张评分（420张）</span>
+          </button>
+          <button class="mode-button" data-mode="focus20" type="button">
+            <strong>重点 20 张</strong><span>Rule / Agent / AIGC</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="side-section">
+        <div class="label-row"><span class="section-label">进度</span><strong id="progress-count">—</strong></div>
+        <div class="progress"><span id="progress-bar"></span></div>
+        <p id="progress-text" class="help">正在载入…</p>
+      </section>
+
+      <section class="side-section">
+        <label for="task-select">任务</label>
+        <select id="task-select"></select>
+        <div class="nav-buttons">
+          <button id="previous" class="button secondary" type="button">← 上一张</button>
+          <button id="next" class="button secondary" type="button">下一张 →</button>
+        </div>
+        <button id="next-incomplete" class="button quiet full" type="button">跳到下一未完成</button>
+      </section>
+
+      <section class="side-section grade-help">
+        <span class="section-label">等级口径</span>
+        <p><b class="badge grade-a">A</b> 可直接上传</p>
+        <p><b class="badge grade-b">B</b> 有轻微问题，但仍可上传</p>
+        <p><b class="badge grade-c">C</b> 需要明显修复或重做</p>
+        <p><b class="badge grade-d">D</b> 不可使用</p>
+      </section>
+    </aside>
+
+    <main>
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">以实际能否上传为准</p>
+          <h1>图片重定向人工评审</h1>
+          <p id="mode-description">完整60张：逐张校对七种候选和机器判分。</p>
+        </div>
+        <span id="save-state" class="save-state">尚未修改</span>
+      </header>
+
+      <div id="error" class="error hidden"></div>
+      <section id="loading" class="loading">正在读取本地图片与评分记录…</section>
+
+      <div id="workspace" class="hidden">
+        <section class="task-header">
+          <div>
+            <p id="task-position" class="eyebrow"></p>
+            <h2 id="task-title"></h2>
+            <p id="task-meta" class="muted"></p>
+          </div>
+          <a id="comparison-link" class="button secondary" target="_blank" rel="noreferrer">打开现有对比图</a>
+        </section>
+
+        <details class="guide" open>
+          <summary>评分顺序与宽松口径</summary>
+          <div class="guide-body">
+            <ol>
+              <li>先看原图，确认关键主体、人物数量、标题、日期、Logo和结构。</li>
+              <li>再按原尺寸打开结果图。画布比例、留白或元素位置改变本身不是缺陷。</li>
+              <li>每个任务的7个候选都要独立评分；不要因为它是Rule或Agent选择就提高或降低等级。</li>
+              <li>Rule显示连续代理分及指标依据；Agent只对高清复核候选给A/B/C/D，其余候选只显示总览排名。</li>
+              <li>A/B都视为通过。即便存在轻微问题，只要不影响整体上传，可以给A或B。</li>
+              <li>C/D必须指出具体对象、位置及为什么需要返工；不能只写“有形变”。</li>
+              <li>AIGC没有回图时显示技术失败，不进行图像质量评分。</li>
+            </ol>
+          </div>
+        </details>
+
+        <section class="source-section">
+          <div class="section-heading">
+            <div><p class="eyebrow">内容基准</p><h2>原图</h2></div>
+            <p>点击图片在新标签页打开原始分辨率。</p>
+          </div>
+          <a id="source-link" class="source-card" target="_blank" rel="noreferrer">
+            <img id="source-image" alt="当前任务原图">
+          </a>
+        </section>
+
+        <section>
+          <div class="section-heading">
+            <div><p class="eyebrow">独立人工判断</p><h2 id="candidate-heading">最终结果</h2></div>
+            <p>Rule、Agent与大模型复核建议仅供校对，不是人工金标。</p>
+          </div>
+          <div id="candidate-grid" class="candidate-grid"></div>
+        </section>
+      </div>
+    </main>
+
+    <footer id="save-bar" class="save-bar hidden">
+      <div><strong id="completion">请完成评分与理由</strong><span id="validation">每条可用路线都必须填写</span></div>
+      <div>
+        <button id="save" class="button secondary large" type="button">保存当前任务</button>
+        <button id="save-next" class="button primary large" type="button">保存并进入下一张 →</button>
+      </div>
+    </footer>
+
+    <div id="toast" class="toast"></div>
+  </body>
+</html>

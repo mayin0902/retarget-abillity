@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="description" content="Retarget Engine 图片重定向评审工作台">
+    <title>Retarget Engine · 图片重定向评审</title>
+    <link rel="stylesheet" href="/assets/app.css">
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#review-main">跳到评审内容</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="评审控制台">
+        <div class="brand">
+          <div>
+            <strong>Retarget Engine</strong>
+            <span>质量评审工作台</span>
+          </div>
+        </div>
+
+        <form id="reviewer-form" class="control-section">
+          <label for="reviewer-id">Reviewer ID</label>
+          <div class="input-action">
+            <input id="reviewer-id" name="reviewer_id" value="local-reviewer"
+              pattern="[a-z0-9][a-z0-9_-]*" maxlength="80" autocomplete="off"
+              aria-describedby="reviewer-help">
+            <button class="button button-secondary button-compact" type="submit">载入</button>
+          </div>
+          <p id="reviewer-help" class="field-help">同一 ID 可断点续评；仅用小写字母、数字、- 或 _。</p>
+        </form>
+
+        <section class="control-section" aria-labelledby="progress-title">
+          <div class="section-label-row">
+            <span id="progress-title" class="section-label">总体进度</span>
+            <strong id="progress-count">— / —</strong>
+          </div>
+          <div class="progress-track" role="progressbar" aria-label="任务完成进度"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="progress-fill"></span>
+          </div>
+          <span id="progress-percent" class="field-help">正在载入…</span>
+        </section>
+
+        <section class="control-section" aria-labelledby="navigation-title">
+          <span id="navigation-title" class="section-label">任务导航</span>
+          <select id="task-select" aria-label="选择评审任务" disabled>
+            <option>正在载入…</option>
+          </select>
+          <div class="navigation-buttons">
+            <button id="previous-task" class="button button-secondary" type="button" disabled>← 上一项</button>
+            <button id="next-task" class="button button-secondary" type="button" disabled>下一项 →</button>
+          </div>
+          <button id="next-incomplete" class="button button-quiet" type="button" disabled>跳到下一未完成任务</button>
+        </section>
+
+        <section class="control-section quick-rubric" aria-labelledby="quick-rubric-title">
+          <span id="quick-rubric-title" class="section-label">等级速查</span>
+          <dl>
+            <div><dt class="grade-pill grade-a">A</dt><dd>可直接交付</dd></div>
+            <div><dt class="grade-pill grade-b">B</dt><dd>小修即可用</dd></div>
+            <div><dt class="grade-pill grade-c">C</dt><dd>明显返工</dd></div>
+            <div><dt class="grade-pill grade-d">D</dt><dd>不可使用</dd></div>
+            <div><dt class="grade-pill grade-skip">Skip</dt><dd>无法公平判断</dd></div>
+          </dl>
+        </section>
+
+        <p class="sidebar-note">草稿实时保存在本浏览器；提交后追加到 Run。本工具不上传图片，也不调用生成式或付费 API。</p>
+      </aside>
+
+      <main id="review-main" class="main-content" tabindex="-1">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">候选质量与保护证据</p>
+            <h1>图片重定向评审</h1>
+            <p id="run-meta" class="run-meta">正在连接本地 Run…</p>
+          </div>
+          <div class="header-status">
+            <span id="save-state" class="status-badge status-neutral">尚未载入</span>
+            <a class="button button-quiet" href="/api/docs" target="_blank" rel="noreferrer">API 文档</a>
+          </div>
+        </header>
+
+        <div id="error-banner" class="alert alert-error hidden" role="alert"></div>
+
+        <section id="loading-panel" class="loading-panel" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <div><strong>正在载入评审工作区</strong><p>读取冻结候选和当前 Reviewer 的断点记录…</p></div>
+        </section>
+
+        <div id="workspace" class="hidden">
+          <section class="task-heading" aria-labelledby="task-title">
+            <div>
+              <p id="task-position" class="eyebrow">任务 — / —</p>
+              <h2 id="task-title">—</h2>
+              <p id="task-meta" class="task-meta"></p>
+            </div>
+            <div class="target-badge">
+              <span>目标画布</span>
+              <strong id="target-size">— × —</strong>
+              <small id="target-ratio">—</small>
+            </div>
+          </section>
+
+          <details class="review-guide" open>
+            <summary>
+              <span><strong>评分说明与操作顺序</strong><small>首次评审请完整阅读，避免把技术 Top-1 当作标准答案</small></span>
+              <span class="summary-action">展开 / 收起</span>
+            </summary>
+            <div class="guide-content">
+              <ol class="guide-steps">
+                <li><span>1</span><div><strong>先看源图</strong><p>找出必须保留的文字、Logo、人物、商品、价格、按钮、角标和结构线。</p></div></li>
+                <li><span>2</span><div><strong>放大检查全部候选</strong><p>点击图片进入全屏；文字边缘、脸手、商品轮廓和建筑细线要看原图细节。</p></div></li>
+                <li><span>3</span><div><strong>填写总等级与六项细分</strong><p>先给 A/B/C/D，再检查主体、人物、文字、商品、构图和伪影；无法公平判断才使用 Skip。</p></div></li>
+                <li><span>4</span><div><strong>核对大模型预审</strong><p>方法名与推荐结果可见，但必须以源图语义和实际像素为准；覆盖推荐时写明原因。</p></div></li>
+              </ol>
+              <div class="rubric-grid">
+                <article><span class="grade-pill grade-a">A</span><div><strong>可直接使用</strong><p>关键信息完整、文字可读、人物/商品自然，构图与清晰度达到交付标准。</p></div></article>
+                <article><span class="grade-pill grade-b">B</span><div><strong>小修可用</strong><p>主体与信息完整，只有轻微形变、留白或构图问题，不需要重新生成。</p></div></article>
+                <article><span class="grade-pill grade-c">C</span><div><strong>明显返工</strong><p>核心内容尚在，但有明显形变、裁切、文字或构图问题，需要重新处理。</p></div></article>
+                <article><span class="grade-pill grade-d">D</span><div><strong>不可使用</strong><p>关键主体或文字丢失、严重变形，或者存在无法接受的技术失败。</p></div></article>
+                <article><span class="grade-pill grade-skip">Skip</span><div><strong>无法判断</strong><p>候选缺失、源图本身不可判读，或当前任务不具备公平评分条件。</p></div></article>
+              </div>
+              <div class="inspection-callout"><strong>逐项检查：</strong>内容有没有被裁掉？文字与 Logo 是否仍可读？脸、手和商品是否被拉伸？建筑/货架直线是否弯曲？目标比例下是否仍像一张完整成图？</div>
+            </div>
+          </details>
+
+          <section class="reference-section" aria-labelledby="reference-title">
+            <div class="section-heading">
+              <div><p class="eyebrow">判断基准</p><h2 id="reference-title">源图与技术建议对照</h2></div>
+              <p>对照图只用于建立内容基准；正式等级在下方全部候选卡片中填写。</p>
+            </div>
+            <div id="reference-grid" class="reference-grid"></div>
+          </section>
+
+          <section class="candidate-section" aria-labelledby="candidate-title">
+            <div class="section-heading">
+              <div><p class="eyebrow">逐项核对</p><h2 id="candidate-title">候选结果</h2></div>
+              <p>方法名当前可见（非盲评）。请全屏或下载原尺寸图后判断细节。</p>
+            </div>
+            <div id="candidate-grid" class="candidate-grid"></div>
+          </section>
+
+          <section class="best-section" aria-labelledby="best-title">
+            <div><p class="eyebrow">任务级选择</p><h2 id="best-title">最佳候选</h2><p>只能从已评为 A 或 B 的候选中选一张；全部不可用时保持“不选择”。</p></div>
+            <select id="best-select" aria-label="选择本任务最佳候选">
+              <option value="">不选择最佳候选</option>
+            </select>
+          </section>
+
+          <div class="save-spacer" aria-hidden="true"></div>
+        </div>
+      </main>
+    </div>
+
+    <div id="save-bar" class="save-bar hidden">
+      <div class="save-summary">
+        <strong id="completion-summary">0 / 5 张已评分</strong>
+        <span id="validation-summary">请完成所有候选评分</span>
+      </div>
+      <div class="save-actions">
+        <button id="save-only" class="button button-secondary button-large" type="button">仅保存</button>
+        <button id="save-next" class="button button-primary button-large" type="button">保存并进入下一任务 →</button>
+      </div>
+    </div>
+
+    <dialog id="image-dialog" class="image-dialog">
+      <div class="dialog-toolbar">
+        <div><span class="eyebrow">原始分辨率预览</span><strong id="dialog-title">图片预览</strong></div>
+        <div>
+          <a id="dialog-download" class="button button-secondary" href="#" download>下载原图</a>
+          <button id="dialog-close" class="button button-secondary" type="button" aria-label="关闭预览">关闭 ✕</button>
+        </div>
+      </div>
+      <div class="dialog-stage"><img id="dialog-image" alt="原始分辨率预览"></div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

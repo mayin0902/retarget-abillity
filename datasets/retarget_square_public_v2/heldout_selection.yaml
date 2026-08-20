@@ -1,0 +1,269 @@
+schema_version: "1.0"
+selection_id: heldout240-codex-visual-v1
+reviewer: codex
+review_date: "2026-08-12"
+review_contract:
+  - original-detail overview viewed for every selected source
+  - final scene confirmed visually; discovery labels were not treated as truth
+  - safety, real-world and non-fixture status confirmed
+  - per-file public license, author and attribution present
+  - people, products, text and complex scenes remain API-egress disabled
+  - near-duplicate event variants and higher-risk people scenes were excluded
+pressure_revision:
+  requested_heldout: {aspect_hard_1: 50, aspect_hard_2: 138, aspect_extreme: 52}
+  first_feasibility_proposal: {aspect_hard_1: 90, aspect_hard_2: 100, aspect_extreme: 50}
+  frozen_heldout: {aspect_hard_1: 104, aspect_hard_2: 86, aspect_extreme: 50}
+  frozen_full300: {aspect_hard_1: 144, aspect_hard_2: 98, aspect_extreme: 58}
+  reason: >-
+    Official-source search and original-detail review proved the requested pressure
+    mix infeasible under the exact scene, safety and near-duplicate gates. The first
+    90/100/50 proposal was superseded after a stricter people-scene safety and event-
+    duplicate pass. 104 is the measured minimum hard-1 count for 240 scene-valid rows.
+selections:
+  chinese_dense_poster:
+    - commons-08663052f2c9
+    - commons-18d58fe71bbc
+    - commons-1fe0da7c0b87
+    - commons-289f52b3b117
+    - commons-2f03594080ec
+    - commons-2f906216c727
+    - commons-32e787fb985f
+    - commons-32f56b53027e
+    - commons-36ebdf2b31a2
+    - commons-3fe3f29d6ba3
+    - commons-52a30487d653
+    - commons-60d7ca5066c3
+    - commons-6d45c99b8673
+    - commons-6e53b75feb09
+    - commons-74124d22e7d9
+    - commons-760051ee30d1
+    - commons-797e4699b2ad
+    - commons-7bde8fac2155
+    - commons-820ff9b73ba3
+    - commons-84e3f4b0979e
+    - commons-880b3d503ecd
+    - commons-8dc4bd6cb9f3
+    - commons-9465ccbaff93
+    - commons-99d6f6d05e5a
+    - commons-9edb9ac52f97
+    - commons-ae8993e7c19b
+    - commons-afe0d0c8bca5
+    - commons-bc205824fb6a
+    - commons-c1e79e98033e
+    - commons-c735a86bcd30
+    - commons-c968ebe8802f
+    - commons-d2b9e167d1eb
+    - commons-d433ae1b04fe
+    - commons-e5092d95d704
+    - commons-e67d3760b676
+    - commons-e8ae5297a202
+    - commons-f347e9cc1005
+    - commons-fd82cf514c7a
+    - commons-ffe99c7b9372
+    - commons-41da0a41ce89
+  single_product_promo:
+    - commons-83854b006fb2
+    - commons-83c3e3a85ed1
+    - commons-3dbdf1f5c742
+    - commons-d25d1c04e29c
+    - commons-e2a5eaeeeeba
+    - commons-e3ad06afb2e6
+    - commons-e813c9c27412
+    - commons-0339fc90b919
+    - commons-0e61f4a430fc
+    - commons-178defdf06a1
+    - commons-1a9335df2c92
+    - commons-1c0b37e99d92
+    - commons-2314bc383c45
+    - commons-2447d5f55631
+    - commons-431aee99b49c
+    - commons-548decb5b0c3
+    - commons-6c864e1d89c6
+    - commons-940e1eff4ff0
+    - commons-bd7054e39a05
+    - commons-c6756b92dd2c
+    - commons-ee83479efdf5
+    - commons-fd33f0126f30
+    - oi-0bb7bd87b4509fcd
+    - commons-8b38d62439f8
+    - commons-94a70073985c
+    - oi-00c8ef9bf591f4fb
+    - oi-0136f7c2e62f46ca
+    - oi-02400d99c2eaf5cc
+    - oi-0251452642908e43
+    - oi-026fa3777c04b863
+    - oi-038d1dae9fc162d4
+    - oi-040bd591585d0e6b
+    - oi-043f3655deab6e7c
+    - oi-0768715f98bd7563
+    - oi-07c9baa2741e5b90
+    - oi-080329408b96faa0
+    - oi-08877441bb91eceb
+    - oi-093d610f36345097
+    - oi-0aad79bc03364c65
+    - oi-0b5e89a49ffe9399
+  multi_product_commercial:
+    - commons-90c64109f1f9
+    - commons-9b604915d3ea
+    - commons-233cdd06d1f6
+    - commons-326b053e2119
+    - commons-5cdc5e28f230
+    - commons-70ea0d839d28
+    - commons-b5925eb0dc48
+    - commons-d52c3d8ae78c
+    - commons-ee5e8a6e26cc
+    - commons-fbe9ebc71343
+    - commons-fddc0e5e57be
+    - commons-141a6e42dd1a
+    - commons-8409bac07d6a
+    - commons-9d8c2d44515b
+    - commons-1076fb7ebe26
+    - commons-1cbb33ba37d5
+    - commons-331edda65616
+    - commons-4b2a679cbff6
+    - commons-6812acda0d17
+    - commons-89f6787ebb1d
+    - commons-94456e6ebfe1
+    - commons-964ed00d3811
+    - commons-b8c5450a2def
+    - commons-be6749a9f67a
+    - commons-d747b94892a9
+    - commons-e2242e34bb02
+    - commons-ef4fcdd7565b
+    - commons-f37c94b20ef9
+    - oi-6099f617c6ce7a39
+    - commons-2c7bc5de267b
+    - commons-62f6ac61102c
+    - commons-6fe14feca25d
+    - commons-7e943260abdc
+    - commons-ab2edbb198bc
+    - commons-b191e818f339
+    - commons-e1c26eb6cb00
+    - oi-031244297d177089
+    - oi-0c8f84c8315e1d50
+    - oi-15c473ae47357d22
+    - oi-36dd21f5006a6b69
+  multi_person:
+    - commons-1296f31d179c
+    - commons-12e03c08dada
+    - commons-189b9dd8898d
+    - commons-f1b732bb9faa
+    - commons-67b736657324
+    - commons-17202c5cd4a3
+    - commons-3062c1d07622
+    - commons-557f284be9ad
+    - commons-7b4ccfd219b7
+    - commons-a3edcb30c0dc
+    - commons-ec2ee63efb64
+    - commons-50ec88d81b7b
+    - commons-51cd78f1e391
+    - commons-68cac0b9bf76
+    - commons-cfcd187d2a4d
+    - commons-d330f5ac392d
+    - commons-eb2d55371836
+    - commons-b19eed2e5430
+    - commons-4b48a5e945fb
+    - commons-099ba81ed475
+    - commons-8de3ceb20492
+    - commons-90412cba315a
+    - commons-baab83e0bffe
+    - commons-2dedc4be304f
+    - commons-6a7040786286
+    - commons-7d0c597661b0
+    - commons-c33b0d03044f
+    - commons-e16f8127b39c
+    - commons-5f8a143c4ebd
+    - commons-7cd949fe7934
+    - commons-8d61abbb73b7
+    - commons-f39ac294a168
+    - oi-00e8e1122ed9f31c
+    - commons-5835540f49a3
+    - oi-07556da96e27ec13
+    - oi-09dd0671cd633432
+    - oi-0047534bb816eb48
+    - oi-0a4c4ab517c2900e
+    - oi-0b1fbd3ba02701cd
+    - commons-3bfe420846da
+  portrait:
+    - commons-35a2ab968e9a
+    - commons-383a01620817
+    - commons-0216e285033a
+    - commons-0bc6922d84c1
+    - commons-1d005fc2b1a7
+    - commons-23b36249f3e0
+    - commons-52310bfe7ab5
+    - commons-5739558e1087
+    - commons-624e88df24d0
+    - commons-6c0d94b2dd5d
+    - commons-73bc19abcbed
+    - commons-7c5872fcbcbe
+    - commons-bb530d1d5dfa
+    - commons-bd2624413fed
+    - commons-c2ecf47fc53e
+    - commons-c8a2ca1a1881
+    - commons-c9cb0b4fc7c6
+    - commons-684aade6d6f9
+    - commons-e95728c630df
+    - commons-ed89646d8701
+    - commons-42a4890f71c0
+    - commons-4cc71050f76d
+    - commons-54cb5efc32bb
+    - commons-7169458d2495
+    - commons-9710e646ae0a
+    - commons-9862892aac0e
+    - commons-9962b20de66b
+  landscape_architecture_structure:
+    - commons-071ecf9ff286
+    - commons-08626caa35fe
+    - commons-0bea2581d1bc
+    - commons-0f01473d1ef5
+    - commons-14996157eb69
+    - commons-1a16e5b1d0ba
+    - commons-1c126d35df29
+    - commons-217b03119a33
+    - commons-2f6b55ead6eb
+    - commons-3d9edb40a893
+    - commons-3e93a36813f4
+    - commons-41aecd3a8a4a
+    - commons-45a5f2a211dc
+    - commons-4886385fc44b
+    - commons-489e2f291392
+    - commons-4d8dee352567
+    - commons-52ee53c6aa31
+    - commons-53d86ead4d3d
+    - commons-68cdf70d15fd
+    - commons-6b6ae5553194
+    - commons-6c5c711892ee
+    - commons-6d0189a10955
+    - commons-038ceca3c5ba
+    - commons-0b342c894c85
+    - commons-0dd1d5e0988f
+    - commons-13481c146cfa
+  complex_mixed:
+    - commons-521215a19f9b
+    - commons-c1c74d7160b0
+    - commons-e40c7501a8cb
+    - commons-69e21d28b38a
+    - commons-94832ce9dc9c
+    - commons-011b5d6ced88
+    - commons-064be9ac7fd6
+    - commons-2075b21daae7
+    - commons-4120c53134c1
+    - commons-50f10beadb5f
+    - commons-63ea681b0d7f
+    - commons-6ac7e9152b8e
+    - commons-6ff0b5afcdd1
+    - commons-7167c064c9e0
+    - commons-77d37116a226
+    - commons-77eb23c6000a
+    - commons-78f98f8d485b
+    - commons-8167d0ab8edc
+    - commons-8541f4448146
+    - commons-91b571c10ab1
+    - commons-b2a188353d0c
+    - commons-b4a6d2df02a3
+    - commons-c88189b7c9fc
+    - commons-d0875f01d9ab
+    - commons-e81bd409bbb9
+    - commons-ee698151dc66
+    - commons-ef08224d83be

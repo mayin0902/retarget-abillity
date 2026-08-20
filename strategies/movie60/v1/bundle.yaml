@@ -1,0 +1,11 @@
+schema_version: "1.0"
+strategy_id: movie60
+version: "1.0.0"
+status: frozen
+description: >-
+  Historical generic proxy baseline. Kept immutable so old automatic evaluations and the first
+  selector skill remain directly reproducible.
+scoring_policy: scoring.yaml
+selection_policy: selection.yaml
+override_policy: override.yaml
+agent_skill: agent-skill.yaml

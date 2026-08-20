@@ -1,0 +1,55 @@
+schema_version: "1.0"
+dataset_root: local_data/datasets/retarget_cn60_v1
+output_root: runs
+run_id: cn60-square-v2-20260818
+seed: 20260818
+device: cpu
+method_profile: cn_square_v2
+methods: [direct_warp, crop, seam, seam_full, mesh, mesh_full, seam_scale]
+analysis:
+  gradient_weight: 0.40
+  contrast_weight: 0.30
+  center_weight: 0.30
+  region_padding_ratio: 0.025
+  detector_mode: required
+  model_root: models/analyzers
+  face_confidence_threshold: 0.55
+  object_confidence_threshold: 0.35
+  object_nms_threshold: 0.50
+  text_binary_threshold: 0.30
+  text_polygon_threshold: 0.50
+  text_max_candidates: 240
+  logo_candidate_limit: 32
+method_parameters:
+  direct_warp: {interpolation: lanczos}
+  crop: {grid_step: 48, scales: [1.0, 0.94, 0.88]}
+  seam:
+    max_seams_per_axis: 24
+    protection_weight: 18.0
+    tolerance_weight: 3.0
+  seam_full:
+    proxy_long_edge: 512
+    protection_weight: 24.0
+    tolerance_weight: 2.5
+    unsafe_mean_importance: 0.45
+    unsafe_peak_importance: 0.90
+  mesh:
+    grid_columns: 12
+    grid_rows: 12
+    protection_gain: 1.8
+    minimum_cell_fraction: 0.25
+  mesh_full:
+    grid_columns: 12
+    grid_rows: 12
+    protection_gain: 5.0
+    uniform_anchor_weight: 0.18
+    smoothness_weight: 0.65
+    unsafe_anisotropy: 4.5
+  seam_scale:
+    proxy_long_edge: 512
+    seam_fraction: 0.45
+    protection_weight: 24.0
+    tolerance_weight: 2.5
+    unsafe_mean_importance: 0.45
+    unsafe_peak_importance: 0.90
+selector: {selector_id: technical_risk_v1}

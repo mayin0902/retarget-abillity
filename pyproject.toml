@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retarget-engine"
+version = "0.3.0"
+description = "An auditable Chinese-scene image retargeting engine with Agent and AIGC routing."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "numpy>=2.0,<3",
+  "opencv-python-headless>=4.10,<5",
+  "Pillow>=11,<13",
+  "psutil>=6,<8",
+  "pydantic>=2.9,<3",
+  "PyYAML>=6,<7",
+  "requests>=2.32,<3",
+  "typer>=0.15,<1",
+  "uvicorn>=0.35,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8,<10",
+  "pytest-cov>=6,<8",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+retarget-engine = "retarget_agent.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+retarget_agent = ["web/*", "web_movie60/*"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

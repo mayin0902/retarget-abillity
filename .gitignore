@@ -1,0 +1,51 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Local and sensitive inputs/outputs
+.env
+.env.*
+!.env.example
+local_data/
+private_context/
+runs/
+!docs/runs/
+!docs/runs/*.md
+tests/fixtures/generated/
+models/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Local service/provider/workflow state
+*.private.yaml
+*.private.yml
+provider_responses/
+billing_cache/
+workflow_uploads/
+workflow_outputs/
+deliverables/
+
+# SQLite transient files
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+
+# Streamlit, IDE and OS
+.streamlit/secrets.toml
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,12 @@
+schema_version: "1.0"
+strategies:
+  - strategy: movie60@1.0.0
+    status: frozen
+    bundle: movie60/v1/bundle.yaml
+    sha256: 9d7c38c23b4cf39337de0d48999547aa8d5bee5025ced907118dc3a2a4967359
+    predecessor: null
+  - strategy: movie60@2.0.0
+    status: active
+    bundle: movie60/v2/bundle.yaml
+    sha256: 724bb98e713286b8efc17b9db05f9137f2dbb5c1bacd9f960c5075e46995d54a
+    predecessor: movie60@1.0.0

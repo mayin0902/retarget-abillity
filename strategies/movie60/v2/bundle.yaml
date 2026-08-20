@@ -1,0 +1,12 @@
+schema_version: "1.0"
+strategy_id: movie60
+version: "2.0.0"
+status: active
+parent_strategy: movie60@1.0.0
+description: >-
+  Current strict Movie60 strategy with seven-method Rule ranking, Rule-anchored high-resolution
+  Agent comparison, configurable A/B/C/D ranges, and fail-closed content-preservation gates.
+scoring_policy: scoring.yaml
+selection_policy: selection.yaml
+override_policy: override.yaml
+agent_skill: agent-skill.yaml

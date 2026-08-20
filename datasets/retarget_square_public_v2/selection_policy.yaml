@@ -1,0 +1,90 @@
+schema_version: "2.0"
+dataset_id: retarget_square_public_v2
+status: full300_materialized_complete
+evaluation_canvas:
+  target_id: square-1024x1024
+  width: 1024
+  height: 1024
+  silent_upsampling_forbidden: true
+generation_pixels:
+  retain_audited_2k_original_when_available: true
+  evaluation_always_downsamples_to: 1024x1024
+splits: {pilot60: 60, held-out240: 240}
+scenes:
+  chinese_dense_poster: {full: 50, pilot: 10, pool_minimum: 150}
+  single_product_promo: {full: 50, pilot: 10, pool_minimum: 150}
+  multi_product_commercial: {full: 50, pilot: 10, pool_minimum: 150}
+  multi_person: {full: 50, pilot: 10, pool_minimum: 150}
+  portrait: {full: 34, pilot: 7, pool_minimum: 102}
+  landscape_architecture_structure: {full: 33, pilot: 7, pool_minimum: 99}
+  complex_mixed: {full: 33, pilot: 6, pool_minimum: 99}
+aspect_pressure:
+  formula: max(width / height, height / width)
+  aspect_hard_1:
+    pressure: "[1.5,2.0)"
+    minimum_long_side: 1024
+    minimum_short_side: 576
+    full_count: 144
+    pilot_count: 40
+    heldout_count: 104
+  aspect_hard_2:
+    pressure: "[2.0,3.0)"
+    minimum_long_side: 1024
+    minimum_short_side: 384
+    full_count: 98
+    pilot_count: 12
+    heldout_count: 86
+  aspect_extreme:
+    pressure: "[3.0,4.0]"
+    minimum_long_side: 1024
+    minimum_short_side: 256
+    full_count: 58
+    pilot_count: 8
+    heldout_count: 50
+pressure_revision:
+  originally_requested_heldout:
+    aspect_hard_1: 50
+    aspect_hard_2: 138
+    aspect_extreme: 52
+  superseded_first_feasibility_proposal:
+    aspect_hard_1: 90
+    aspect_hard_2: 100
+    aspect_extreme: 50
+  frozen_heldout:
+    aspect_hard_1: 104
+    aspect_hard_2: 86
+    aspect_extreme: 50
+  frozen_full300:
+    aspect_hard_1: 144
+    aspect_hard_2: 98
+    aspect_extreme: 58
+  evidence: >-
+    The approved Wikimedia Commons and Open Images V7 small-sample routes were
+    exhausted for the bounded search described in STATUS.md. Original-detail
+    review then rejected wrong-scene product candidates, school or potentially
+    minor people scenes, military/police/political scenes, and duplicate event
+    variants. The earlier 90/100/50 proposal was therefore superseded. Under the
+    fixed scene quotas and the safety, license and near-duplicate gates, 104 is
+    the measured minimum feasible held-out hard-1 count.
+review_contract:
+  reviewer: codex
+  required_per_selected_image:
+    - visual thumbnail overview inspected
+    - scene confirmed
+    - content safety confirmed
+    - real world confirmed
+    - non-fixture confirmed
+    - per-file license and attribution confirmed
+    - non-copyright restrictions reviewed for research benchmark
+  automatic_detector_output_is_ground_truth: false
+license_and_egress:
+  public_release_default: false
+  api_egress_default: false
+  api_egress_requires:
+    - public and license-appropriate source
+    - no sensitive person content
+    - no obvious high-risk trademark use
+    - explicit per-row approval
+deduplication_against:
+  - retarget_smoke_real_hd_v1
+  - retarget_square_public_v1 downloaded sample

@@ -1,0 +1,13 @@
+source_id,fixture_type,test_purpose
+poster-text-dense,programmatic_algorithm_fixture,保护区域密集时的 Crop 可行性和文字框契约
+poster-price-logo,programmatic_algorithm_fixture,标题与价格 must_keep 冲突及 UNSAFE 状态
+product-single,programmatic_algorithm_fixture,单个刚性区域的局部形变风险
+product-multi,programmatic_algorithm_fixture,多个刚性区域的覆盖与失败隔离
+ecommerce-mix,programmatic_algorithm_fixture,商品标题价格混合的算法压力测试
+people-group,programmatic_algorithm_fixture,多 must_keep 人脸与人体区域契约
+portrait-person,programmatic_algorithm_fixture,单人肖像极端目标比例压力测试
+portrait-pair,programmatic_algorithm_fixture,双主体保护冲突测试
+landscape-mountain,programmatic_algorithm_fixture,高容忍背景的 Seam 与 Mesh 路径测试
+architecture-lines,programmatic_algorithm_fixture,结构线和网格 Jacobian 压力测试
+abstract-center,programmatic_algorithm_fixture,同心几何的非占位输出与形变回归
+difficult-mixed,programmatic_algorithm_fixture,复杂区域组合的契约与算法压力测试
