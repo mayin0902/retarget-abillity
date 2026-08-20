@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
+import retarget_agent.evaluation as evaluation_module
 from retarget_agent.evaluation import (
     EvaluationConfig,
     character_recall,
@@ -232,7 +233,9 @@ def test_strict_direct_warp_caps_visible_stretch_at_b_or_c() -> None:
     assert "severe_global_stretch" in severe["critical_regressions"]
 
 
-def test_evaluate_run_writes_separate_replay_artifacts(tmp_path: Path) -> None:
+def test_evaluate_run_writes_separate_replay_artifacts(
+    tmp_path: Path, monkeypatch
+) -> None:
     run_dir = tmp_path / "run-1"
     store = LocalArtifactStore(run_dir)
     task = _task()
@@ -255,6 +258,7 @@ def test_evaluate_run_writes_separate_replay_artifacts(tmp_path: Path) -> None:
         source_width=128,
         source_height=64,
         scene_profile=SceneProfile.COVERAGE,
+        regions=(_text_region("核心价格128"),),
         importance_map=importance,
         tolerance_map=tolerance,
         analyzer_ids=("fixture",),
@@ -324,3 +328,27 @@ def test_evaluate_run_writes_separate_replay_artifacts(tmp_path: Path) -> None:
     assert manifest.candidate_ids == (candidate.candidate_id,)
     assert store.path("evaluations/evaluation-1/summary.json").is_file()
     assert sha256_file(store.path(candidate_path)) == candidate_hash_before
+
+    detected_shapes: list[tuple[int, ...]] = []
+
+    class FakeDetectorSuite:
+        def __init__(self, _config) -> None:
+            pass
+
+        def detect(self, image: np.ndarray, _importance: float):
+            detected_shapes.append(image.shape)
+            return (_text_region("核心价格128"),)
+
+    monkeypatch.setattr(evaluation_module, "ProtectionDetectorSuite", FakeDetectorSuite)
+    evaluate_run(run_dir, "evaluation-2", EvaluationConfig(rerun_detectors=True))
+    rerun_metric = store.read_json(
+        f"evaluations/evaluation-2/metrics/{candidate.candidate_id}.json"
+    )["metrics"]
+
+    assert detected_shapes == [(128, 128, 3)]
+    assert rerun_metric["source_text"] == "核心价格128"
+    assert rerun_metric["candidate_text"] == "核心价格128"
+    assert rerun_metric["ocr_character_recall"] == 1.0
+    assert rerun_metric["ocr_sequence_similarity"] == 1.0
+    assert rerun_metric["detector_rerun_requested"] is True
+    assert rerun_metric["detector_rerun_available"] is True
