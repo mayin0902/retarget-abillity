@@ -7,14 +7,11 @@ from pathlib import Path
 from retarget_agent.agents import (
     AgentMode,
     AgentReplayConfig,
-    OpenAICompatibleVisionBackend,
     run_agent_replay,
 )
 from retarget_agent.models import RunManifest, TaskSpec
-from retarget_agent.rule_anchored_review import (
-    QwenRuleAnchoredReviewAdapter,
-    run_rule_anchored_review,
-)
+from retarget_agent.plugin_catalog import built_in_plugin_catalog
+from retarget_agent.rule_anchored_review import run_rule_anchored_review
 from retarget_agent.storage import LocalArtifactStore
 from retarget_agent.strategy import load_strategy_bundle
 
@@ -50,15 +47,17 @@ def main() -> None:
     args = parser.parse_args()
     run_dir = args.run_dir.resolve()
     strategy = load_strategy_bundle(args.strategy)
+    plugins = built_in_plugin_catalog()
     tasks = _task_ids(run_dir, args.phase)
     if args.command == "overview":
-        backend = OpenAICompatibleVisionBackend(
+        backend = plugins.agent_backends.get(strategy.bundle.agent_backend_plugin)(
             base_url=args.backend_url,
             model_version=args.model,
             timeout_seconds=args.timeout_seconds,
             cache_path=run_dir / "agent-cache" / "overview-rule-aware-qwen4-v4.json",
             skill=strategy.agent_skill,
             skill_sha256=strategy.file_hashes[strategy.bundle.agent_skill],
+            prompt_template=(strategy.prompts.overview if strategy.prompts else None),
         )
         result = run_agent_replay(
             run_dir,
@@ -81,12 +80,18 @@ def main() -> None:
             strategy_bundle=strategy,
         ).model_dump(mode="json")
     else:
-        backend = QwenRuleAnchoredReviewAdapter(
+        backend = plugins.agent_backends.get(strategy.bundle.pair_review_backend_plugin)(
             base_url=args.backend_url,
             model_version=args.model,
             timeout_seconds=args.timeout_seconds,
             candidate_cache_path=(run_dir / "agent-cache" / "strict-rule-anchor-qwen4-v4.json"),
             pair_cache_path=run_dir / "agent-cache" / "pair-rule-anchor-qwen4-v4.json",
+            strict_prompt_template=(
+                strategy.prompts.strict_candidate if strategy.prompts else None
+            ),
+            pair_prompt_template=(
+                strategy.prompts.rule_agent_pair if strategy.prompts else None
+            ),
         )
         result = run_rule_anchored_review(
             run_dir,

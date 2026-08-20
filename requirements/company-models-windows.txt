@@ -1,0 +1,8 @@
+# Current company_cpu_v2 top-level model runtime, verified for Windows x64 on 2026-08-20.
+# Install together with the base project; transitive packages remain resolved by pip.
+paddleocr==3.7.0
+paddlepaddle==3.3.1
+onnxruntime==1.29.0
+torch==2.13.0
+torchvision==0.28.0
+transformers==5.15.1

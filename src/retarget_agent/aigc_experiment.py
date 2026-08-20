@@ -10,7 +10,7 @@ import time
 from collections import Counter
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import cv2
 import numpy as np
@@ -36,6 +36,10 @@ from .strict_review import (
     StrictVisionReviewBackend,
     build_pairwise_review_sheet,
 )
+
+if TYPE_CHECKING:
+    from .plugin_catalog import PluginCatalog
+    from .strategy import LoadedStrategyBundle
 
 SEEDREAM_PROMPT = """Retarget the provided source image into a high-quality square 1:1 composition.
 Preserve the exact identity and natural geometry of every important person, face, body, product,
@@ -129,7 +133,12 @@ def should_rule_request_aigc(
 
 
 def _task_candidate_metrics(
-    run_dir: Path, evaluation_id: str, task_id: str
+    run_dir: Path,
+    evaluation_id: str,
+    task_id: str,
+    *,
+    strategy_bundle: LoadedStrategyBundle | None = None,
+    plugin_catalog: PluginCatalog | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     rows: list[dict[str, Any]] = []
     by_id: dict[str, dict[str, Any]] = {}
@@ -165,8 +174,38 @@ def _task_candidate_metrics(
         )
         for row in rows
     )
-    ranking = deterministic_ranking(evidence_values)
+    if strategy_bundle is None:
+        ranking = deterministic_ranking(evidence_values)
+    else:
+        from .plugin_catalog import built_in_plugin_catalog
+
+        catalog = plugin_catalog or built_in_plugin_catalog()
+        ranking = catalog.selectors.get(strategy_bundle.bundle.rule_selector_plugin)(
+            evidence_values, strategy_bundle.selection
+        )
     return [by_id[candidate_id] for candidate_id in ranking], by_id
+
+
+def _aigc_evaluation_root(
+    run_dir: Path, strategy_bundle: LoadedStrategyBundle | None
+) -> Path:
+    if strategy_bundle is None:
+        return run_dir / "external-generation" / "evaluation"
+    key = f"{strategy_bundle.bundle.strategy_id}-{strategy_bundle.bundle.version}"
+    return run_dir / "external-generation" / "evaluations" / key
+
+
+def _aigc_prompt(
+    strategy_bundle: LoadedStrategyBundle | None,
+) -> tuple[str, str, str | None]:
+    if (
+        strategy_bundle is not None
+        and strategy_bundle.prompts is not None
+        and strategy_bundle.prompts.aigc_generation is not None
+    ):
+        template = strategy_bundle.prompts.aigc_generation
+        return template.render(), template.spec.version, template.source_sha256
+    return SEEDREAM_PROMPT, PROMPT_VERSION, None
 
 
 def plan_movie60_aigc(
@@ -178,6 +217,8 @@ def plan_movie60_aigc(
     maximum_paid_calls: int = 20,
     calibration_cap: int = 8,
     validation_cap: int = 12,
+    strategy_bundle: LoadedStrategyBundle | None = None,
+    plugin_catalog: PluginCatalog | None = None,
 ) -> dict[str, Any]:
     """Freeze Rule/Qwen trigger decisions and their capped paid-task union."""
 
@@ -189,10 +230,19 @@ def plan_movie60_aigc(
     output = run_dir / "external-generation" / "plans" / plan_id
     if output.exists():
         raise FileExistsError(output)
+    if strategy_bundle is not None:
+        strategy_bundle.snapshot_to(output / "strategy")
+    generation_prompt, prompt_version, prompt_sha256 = _aigc_prompt(strategy_bundle)
     entries: list[dict[str, Any]] = []
     for task_id in run.task_ids:
         task = TaskSpec.model_validate(store.read_json(f"tasks/{task_id}.json"))
-        rule_ranking, _ = _task_candidate_metrics(run_dir, evaluation_id, task_id)
+        rule_ranking, _ = _task_candidate_metrics(
+            run_dir,
+            evaluation_id,
+            task_id,
+            strategy_bundle=strategy_bundle,
+            plugin_catalog=plugin_catalog,
+        )
         rule_trigger, rule_reasons = should_rule_request_aigc((rule_ranking[0], rule_ranking[1]))
         strict_decision = _read_json(
             run_dir / "strict-reviews" / strict_run_id / "decisions" / f"{task_id}.json"
@@ -262,6 +312,18 @@ def plan_movie60_aigc(
         "egress_authorization_basis": EGRESS_AUTHORIZATION,
         "watermark": False,
         "provider_hard_timeout_seconds": 300,
+        "strategy_id": (
+            strategy_bundle.bundle.strategy_id if strategy_bundle is not None else None
+        ),
+        "strategy_version": (
+            strategy_bundle.bundle.version if strategy_bundle is not None else None
+        ),
+        "strategy_sha256": (
+            strategy_bundle.source_sha256 if strategy_bundle is not None else None
+        ),
+        "aigc_prompt": generation_prompt,
+        "aigc_prompt_version": prompt_version,
+        "aigc_prompt_sha256": prompt_sha256,
         "entries": entries,
     }
     _write_json(output / "plan.json", report)
@@ -351,8 +413,10 @@ def run_seedream_plan(
                     egress_authorization_basis=EGRESS_AUTHORIZATION,
                     target_width=1536,
                     target_height=1536,
-                    prompt=SEEDREAM_PROMPT,
-                    prompt_version=PROMPT_VERSION,
+                    prompt=str(plan.get("aigc_prompt") or SEEDREAM_PROMPT),
+                    prompt_version=str(
+                        plan.get("aigc_prompt_version") or PROMPT_VERSION
+                    ),
                     max_cost_cny=Decimal("0.60"),
                 )
             )
@@ -410,7 +474,13 @@ def _read_rgb(path: Path) -> np.ndarray:
         return np.asarray(ImageOps.exif_transpose(opened).convert("RGB")).copy()
 
 
-def evaluate_seedream_results(run_dir: Path, plan_id: str) -> dict[str, Any]:
+def evaluate_seedream_results(
+    run_dir: Path,
+    plan_id: str,
+    *,
+    strategy_bundle: LoadedStrategyBundle | None = None,
+    plugin_catalog: PluginCatalog | None = None,
+) -> dict[str, Any]:
     """Run the same proxy detector/metric family over every successful paid output."""
 
     run_dir = run_dir.resolve()
@@ -418,9 +488,47 @@ def evaluate_seedream_results(run_dir: Path, plan_id: str) -> dict[str, Any]:
     plan = _read_json(run_dir / "external-generation" / "plans" / plan_id / "plan.json")
     with (run_dir / "config" / "run.yaml").open("r", encoding="utf-8") as handle:
         analysis_config = AnalysisConfig.model_validate((yaml.safe_load(handle) or {})["analysis"])
-    detector = ProtectionDetectorSuite(analysis_config)
-    config = EvaluationConfig()
-    metrics_dir = run_dir / "external-generation" / "evaluation" / "metrics"
+    if strategy_bundle is None:
+        detector = ProtectionDetectorSuite(analysis_config)
+        scorer = compute_proxy_metrics
+        config = EvaluationConfig()
+        scoring_policy = None
+    else:
+        from .plugin_catalog import built_in_plugin_catalog
+
+        catalog = plugin_catalog or built_in_plugin_catalog()
+        analysis_config = analysis_config.model_copy(
+            update={
+                "detector_suite_plugin": strategy_bundle.bundle.detector_suite_plugin
+            }
+        )
+        detector = catalog.detector_suites.get(
+            strategy_bundle.bundle.detector_suite_plugin
+        )(analysis_config)
+        scorer = catalog.reference_scorers.get(
+            strategy_bundle.bundle.reference_scorer_plugin
+        )
+        scoring_policy = strategy_bundle.scoring
+        config = EvaluationConfig(
+            evaluator_id=scoring_policy.evaluator_id,
+            evaluator_version=scoring_policy.evaluator_version,
+            max_analysis_edge=scoring_policy.max_analysis_edge,
+            proxy_a_threshold=scoring_policy.proxy_a_threshold,
+            proxy_b_threshold=scoring_policy.proxy_b_threshold,
+            proxy_c_threshold=scoring_policy.proxy_c_threshold,
+            critical_text_recall=scoring_policy.critical_text_recall,
+            blank_std_threshold=scoring_policy.blank_std_threshold,
+            direct_warp_proxy_a_cap_d_stretch=(
+                scoring_policy.direct_warp_proxy_a_cap_d_stretch
+            ),
+            direct_warp_proxy_c_cap_d_stretch=(
+                scoring_policy.direct_warp_proxy_c_cap_d_stretch
+            ),
+        )
+    evaluation_root = _aigc_evaluation_root(run_dir, strategy_bundle)
+    if strategy_bundle is not None and not (evaluation_root / "strategy").exists():
+        strategy_bundle.snapshot_to(evaluation_root / "strategy")
+    metrics_dir = evaluation_root / "metrics"
     records: list[dict[str, Any]] = []
     reused_count = 0
     new_count = 0
@@ -456,7 +564,7 @@ def evaluate_seedream_results(run_dir: Path, plan_id: str) -> dict[str, Any]:
             )
             try:
                 candidate_regions = detector.detect(candidate, 0.0)
-                metrics = compute_proxy_metrics(
+                metrics = scorer(
                     source=source,
                     candidate=candidate,
                     task=task,
@@ -464,6 +572,7 @@ def evaluate_seedream_results(run_dir: Path, plan_id: str) -> dict[str, Any]:
                     candidate_regions=candidate_regions,
                     transform=None,
                     config=config,
+                    scoring_policy=scoring_policy,
                 )
             except (OSError, ValueError, cv2.error) as error:
                 metrics = {
@@ -480,6 +589,9 @@ def evaluate_seedream_results(run_dir: Path, plan_id: str) -> dict[str, Any]:
             "task_id": task_id,
             "candidate_id": f"{task_id}--seedream--v1",
             "method_id": "seedream",
+            "strategy_sha256": (
+                strategy_bundle.source_sha256 if strategy_bundle is not None else None
+            ),
             "metrics": metrics,
         }
         _write_json(metric_path, payload)
@@ -496,7 +608,7 @@ def evaluate_seedream_results(run_dir: Path, plan_id: str) -> dict[str, Any]:
         "proxy_a_count": sum(item["metrics"].get("proxy_is_a", False) for item in records),
         "grade_counts": dict(Counter(item["metrics"].get("proxy_grade") for item in records)),
     }
-    _write_json(run_dir / "external-generation" / "evaluation" / "summary.json", summary)
+    _write_json(evaluation_root / "summary.json", summary)
     return summary
 
 
@@ -507,6 +619,8 @@ def review_seedream_results(
     backend: StrictVisionReviewBackend,
     *,
     task_ids: set[str] | None = None,
+    strategy_bundle: LoadedStrategyBundle | None = None,
+    plugin_catalog: PluginCatalog | None = None,
 ) -> dict[str, Any]:
     """Strictly review successful SeedDream outputs against the same source."""
 
@@ -517,9 +631,25 @@ def review_seedream_results(
     if output.exists():
         raise FileExistsError(output)
     output.mkdir(parents=True)
+    if strategy_bundle is not None:
+        strategy_bundle.snapshot_to(output / "strategy")
     with (run_dir / "config" / "run.yaml").open("r", encoding="utf-8") as handle:
         analysis_config = AnalysisConfig.model_validate((yaml.safe_load(handle) or {})["analysis"])
-    detector = ProtectionDetectorSuite(analysis_config)
+    if strategy_bundle is None:
+        detector = ProtectionDetectorSuite(analysis_config)
+    else:
+        from .plugin_catalog import built_in_plugin_catalog
+
+        catalog = plugin_catalog or built_in_plugin_catalog()
+        analysis_config = analysis_config.model_copy(
+            update={
+                "detector_suite_plugin": strategy_bundle.bundle.detector_suite_plugin
+            }
+        )
+        detector = catalog.detector_suites.get(
+            strategy_bundle.bundle.detector_suite_plugin
+        )(analysis_config)
+    evaluation_root = _aigc_evaluation_root(run_dir, strategy_bundle)
     reviews: list[dict[str, Any]] = []
     for item in plan["entries"]:
         if not item["selected_for_paid_generation"]:
@@ -537,9 +667,7 @@ def review_seedream_results(
             store.read_json(f"analysis/{task_id}/analysis.json")
         )
         metric = _read_json(
-            run_dir
-            / "external-generation"
-            / "evaluation"
+            evaluation_root
             / "metrics"
             / f"{task_id}--seedream--v1.json"
         )["metrics"]
@@ -606,6 +734,9 @@ def build_four_arm_report(
     plan_id: str,
     seedream_review_id: str,
     report_id: str,
+    *,
+    strategy_bundle: LoadedStrategyBundle | None = None,
+    plugin_catalog: PluginCatalog | None = None,
 ) -> dict[str, Any]:
     """Finalize four complete routes without retroactively changing trigger decisions."""
 
@@ -623,11 +754,18 @@ def build_four_arm_report(
         "qwen4_aigc": [],
     }
     paid_task_ids: set[str] = set()
+    evaluation_root = _aigc_evaluation_root(run_dir, strategy_bundle)
     for task_id in run.task_ids:
         entry = plan_by_task[task_id]
         rule_id = entry["rule_selected_candidate_id"]
         qwen_id = entry["qwen_selected_candidate_id"]
-        metric_by_id = _task_candidate_metrics(run_dir, evaluation_id, task_id)[1]
+        metric_by_id = _task_candidate_metrics(
+            run_dir,
+            evaluation_id,
+            task_id,
+            strategy_bundle=strategy_bundle,
+            plugin_catalog=plugin_catalog,
+        )[1]
         rule_metric = metric_by_id[rule_id]
         qwen_metric = metric_by_id[qwen_id]
         strict = _read_json(
@@ -638,9 +776,7 @@ def build_four_arm_report(
         qwen_final_id = qwen_id
         qwen_final_metric = qwen_metric
         seedream_metric_path = (
-            run_dir
-            / "external-generation"
-            / "evaluation"
+            evaluation_root
             / "metrics"
             / f"{task_id}--seedream--v1.json"
         )
@@ -762,6 +898,9 @@ def build_four_arm_report(
         ),
         "actual_cost_cny": None,
         "agent_token_cost_assumption": "company_internal_zero",
+        "strategy_sha256": (
+            strategy_bundle.source_sha256 if strategy_bundle is not None else None
+        ),
         "limitations": [
             "Proxy grades are automatic evidence, not official human labels.",
             "Codex visual audit is reported separately and never named human ground truth.",
@@ -772,6 +911,8 @@ def build_four_arm_report(
     if output.exists():
         raise FileExistsError(output)
     output.mkdir(parents=True)
+    if strategy_bundle is not None:
+        strategy_bundle.snapshot_to(output / "strategy")
     _write_json(output / "report.json", report)
     _write_json(output / "tasks.json", task_rows)
     for arm, rows in arms.items():

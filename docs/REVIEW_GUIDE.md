@@ -63,7 +63,7 @@ A+B均统计为通过。人工可以比当前机器阈值宽松，但必须写�
 
 推荐直接双击：
 
-先按 `docs/START_HERE.md` 物化私有 Release，再运行：
+先按 `docs/runbooks/WINDOWS_INSTALL.md` 安装，再按 `docs/DATA_AND_RESULTS.md` 物化私有 Release，然后运行：
 
 ```text
 local_data/movie60-review-v1/start-review.bat

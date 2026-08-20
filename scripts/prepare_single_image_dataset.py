@@ -173,6 +173,7 @@ def materialize_single_image_dataset(
             "center_weight": 0.30,
             "region_padding_ratio": 0.025,
             "detector_mode": "required",
+            "detector_suite_plugin": "company_cpu_v2",
             "model_root": "models/analyzers",
             "face_confidence_threshold": 0.55,
             "object_confidence_threshold": 0.35,

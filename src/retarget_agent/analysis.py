@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from .config import AnalysisConfig
 from .datasets import read_region_rows
 from .models import HumanGuidance, Rect, RegionKind, RegionRecord, TaskSpec
-from .protection_detectors import ProtectionDetectorSuite
 from .protocols import AnalysisOutput
 
 
@@ -31,14 +30,19 @@ class SharedProtectionAnalyzer:
         self.dataset_root = dataset_root
         self.config = config
         self._region_rows = read_region_rows(dataset_root)
-        self._detector_suite: ProtectionDetectorSuite | None = None
+        self._detector_suite: object | None = None
         self._detector_warning: str | None = None
         self._detection_cache: dict[str, tuple[RegionRecord, ...]] = {}
         self._saliency_cache_key: str | None = None
         self._saliency_cache_maps: tuple[np.ndarray, np.ndarray] | None = None
         if config.detector_mode != "disabled":
             try:
-                self._detector_suite = ProtectionDetectorSuite(config)
+                from .plugin_catalog import built_in_plugin_catalog
+
+                factory = built_in_plugin_catalog().detector_suites.get(
+                    config.detector_suite_plugin
+                )
+                self._detector_suite = factory(config)
             except (FileNotFoundError, OSError, ValueError, cv2.error) as error:
                 if config.detector_mode == "required":
                     raise
@@ -72,11 +76,13 @@ class SharedProtectionAnalyzer:
         elif self._detector_warning is not None:
             warnings.append(self._detector_warning)
         elif self._detector_suite is not None:
-            analyzer_ids.extend(self._detector_suite.analyzer_ids)
+            analyzer_ids.extend(self._detector_suite.analyzer_ids)  # type: ignore[attr-defined]
             detected = self._detection_cache.get(task.source.sha256)
             if detected is None:
                 try:
-                    detected = self._detector_suite.detect(image, self.config.region_padding_ratio)
+                    detected = self._detector_suite.detect(  # type: ignore[attr-defined]
+                        image, self.config.region_padding_ratio
+                    )
                 except (OSError, ValueError, cv2.error) as error:
                     if self.config.detector_mode == "required":
                         raise

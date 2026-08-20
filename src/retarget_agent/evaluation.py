@@ -679,11 +679,39 @@ def evaluate_run(
         strategy_snapshot = f"{base}/strategy"
         strategy_bundle.snapshot_to(store.path(strategy_snapshot))
     source_run = RunManifest.model_validate(store.read_json("run.json"))
-    detector_suite: ProtectionDetectorSuite | None = None
+    from .plugin_catalog import built_in_plugin_catalog
+
+    catalog = built_in_plugin_catalog()
+    scorer_id = (
+        strategy_bundle.bundle.reference_scorer_plugin
+        if strategy_bundle is not None
+        else "auto_proxy_v1"
+    )
+    if strategy_bundle is not None and strategy_bundle.scoring.implementation != scorer_id:
+        raise ValueError(
+            "strategy scoring implementation and reference_scorer_plugin must match"
+        )
+    scorer = catalog.reference_scorers.get(scorer_id)
+    detector_suite: Any | None = None
     detector_error: str | None = None
     if config.rerun_detectors:
         try:
-            detector_suite = ProtectionDetectorSuite(_load_analysis_config(run_dir))
+            analysis_config = _load_analysis_config(run_dir)
+            if strategy_bundle is not None:
+                analysis_config = analysis_config.model_copy(
+                    update={
+                        "detector_suite_plugin": strategy_bundle.bundle.detector_suite_plugin
+                    }
+                )
+            detector_factory = catalog.detector_suites.get(
+                analysis_config.detector_suite_plugin
+            )
+            # Keep the historical symbol as the legacy factory seam.  Old tests and
+            # embedding code monkeypatch this name, while current strategies resolve
+            # every other implementation through the allowlisted catalog.
+            if analysis_config.detector_suite_plugin == "legacy_opencv_v1":
+                detector_factory = ProtectionDetectorSuite
+            detector_suite = detector_factory(analysis_config)
         except (FileNotFoundError, OSError, ValueError, cv2.error) as error:
             detector_error = f"{type(error).__name__}: {error}"[:300]
 
@@ -731,7 +759,7 @@ def evaluate_run(
                     if candidate.transform
                     else None
                 )
-                metrics = compute_proxy_metrics(
+                metrics = scorer(
                     source=source,
                     candidate=candidate_image,
                     task=task,

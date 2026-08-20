@@ -1,0 +1,35 @@
+schema_version: "1.0"
+profile_id: company_cpu_v2
+platform: windows-x86_64-cpu
+status: current
+models:
+  - component: ocr_detection
+    model: PP-OCRv6_small_det
+    runtime: PaddleOCR local pipeline with ONNX Runtime CPU engine
+    official_source: https://www.paddleocr.ai/latest/en/version3.x/pipeline_usage/OCR.html
+    license: Apache-2.0
+  - component: ocr_recognition
+    model: PP-OCRv6_small_rec
+    runtime: PaddleOCR local pipeline with ONNX Runtime CPU engine
+    official_source: https://www.paddleocr.ai/latest/en/version3.x/pipeline_usage/OCR.html
+    license: Apache-2.0
+  - component: object_person_product
+    model: ustc-community/dfine-nano-coco
+    revision: 066438d3d8f0da137a37b38fdf3368fd4afceced
+    runtime: Transformers CPU
+    official_source: https://huggingface.co/docs/transformers/main/model_doc/d_fine
+    license: Apache-2.0
+  - component: face
+    model: face_detection_yunet_2023mar.onnx
+    runtime: OpenCV DNN CPU
+    official_source: https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet
+    license: MIT
+  - component: logo_candidate
+    model: deterministic MSER/edge heuristic
+    runtime: OpenCV CPU
+    official_source: local implementation
+    license: repository license
+notes:
+  - Model weights and caches are excluded from Git.
+  - The legacy OpenCV profile exists only to replay historical Run artifacts.
+  - Ultralytics models are not the default because their standard open-source license is AGPL-3.0.

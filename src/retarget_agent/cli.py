@@ -19,6 +19,8 @@ review_app = typer.Typer(help="Human review tools.")
 agent_app = typer.Typer(help="Controlled Agent routing over frozen evaluations.")
 benchmark_app = typer.Typer(help="Complete-denominator automatic benchmark reports.")
 generation_app = typer.Typer(help="Budgeted external-generation planning and execution.")
+score_app = typer.Typer(help="Score one candidate with or without a source reference.")
+plugin_app = typer.Typer(help="Inspect allowlisted runtime plugins.")
 app.add_typer(dataset_app, name="dataset")
 app.add_typer(run_app, name="run")
 app.add_typer(replay_app, name="replay")
@@ -27,6 +29,107 @@ app.add_typer(agent_app, name="agent")
 app.add_typer(benchmark_app, name="benchmark")
 app.add_typer(generation_app, name="generation")
 app.add_typer(strategy_app, name="strategy")
+app.add_typer(score_app, name="score")
+app.add_typer(plugin_app, name="plugins")
+
+
+@plugin_app.command("list")
+def plugins_list() -> None:
+    """Print executable plugin IDs accepted by StrategyBundle."""
+    from .plugin_catalog import built_in_plugin_catalog
+
+    typer.echo(json.dumps(built_in_plugin_catalog().describe(), ensure_ascii=False, indent=2))
+
+
+def _image_review_backend(
+    loaded_strategy: object,
+    backend_url: str | None,
+    model: str | None,
+    api_key_env: str | None,
+):
+    if backend_url is None and model is None:
+        return None
+    if not backend_url or not model:
+        raise typer.BadParameter("--agent-backend-url and --agent-model must be used together")
+    if loaded_strategy.prompts is None or loaded_strategy.prompts.standalone_image is None:
+        raise typer.BadParameter("strategy has no standalone-image Agent prompt")
+    from .plugin_catalog import built_in_plugin_catalog
+
+    factory = built_in_plugin_catalog().agent_backends.get(
+        loaded_strategy.bundle.image_review_backend_plugin
+    )
+    return factory(
+        base_url=backend_url,
+        model_version=model,
+        api_key_env=api_key_env,
+        prompt_template=loaded_strategy.prompts.standalone_image,
+    )
+
+
+@score_app.command("reference")
+def score_reference(
+    source: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    candidate: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    output_dir: Annotated[Path, typer.Option("--output-dir")],
+    strategy: Annotated[
+        Path,
+        typer.Option("--strategy", exists=True, dir_okay=False),
+    ] = Path("strategies/movie60/v2_1/bundle.yaml"),
+    agent_backend_url: Annotated[
+        str | None, typer.Option("--agent-backend-url")
+    ] = None,
+    agent_model: Annotated[str | None, typer.Option("--agent-model")] = None,
+    agent_api_key_env: Annotated[
+        str | None, typer.Option("--agent-api-key-env")
+    ] = None,
+) -> None:
+    """Compare one candidate with its source and emit JSON/Markdown/overlay."""
+    from .image_scoring import score_image
+    from .strategy import load_strategy_bundle
+
+    loaded = load_strategy_bundle(strategy)
+    result = score_image(
+        source_path=source,
+        candidate_path=candidate,
+        output_dir=output_dir,
+        strategy=loaded,
+        agent_backend=_image_review_backend(
+            loaded, agent_backend_url, agent_model, agent_api_key_env
+        ),
+    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@score_app.command("standalone")
+def score_standalone(
+    candidate: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    output_dir: Annotated[Path, typer.Option("--output-dir")],
+    strategy: Annotated[
+        Path,
+        typer.Option("--strategy", exists=True, dir_okay=False),
+    ] = Path("strategies/movie60/v2_1/bundle.yaml"),
+    agent_backend_url: Annotated[
+        str | None, typer.Option("--agent-backend-url")
+    ] = None,
+    agent_model: Annotated[str | None, typer.Option("--agent-model")] = None,
+    agent_api_key_env: Annotated[
+        str | None, typer.Option("--agent-api-key-env")
+    ] = None,
+) -> None:
+    """Inspect one candidate without making source-preservation or grade claims."""
+    from .image_scoring import score_image
+    from .strategy import load_strategy_bundle
+
+    loaded = load_strategy_bundle(strategy)
+    result = score_image(
+        candidate_path=candidate,
+        output_dir=output_dir,
+        strategy=loaded,
+        agent_backend=_image_review_backend(
+            loaded, agent_backend_url, agent_model, agent_api_key_env
+        ),
+    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command()

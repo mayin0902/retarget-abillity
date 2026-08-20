@@ -20,6 +20,7 @@ from pydantic import Field, field_validator, model_validator
 from .agent_skill import AgentSkill
 from .hashing import sha256_file, sha256_json
 from .models import FrozenModel, validate_id
+from .prompting import LoadedPromptBundle, load_prompt_bundle
 
 
 class ScoreWeights(FrozenModel):
@@ -69,7 +70,9 @@ class ScoringPolicy(FrozenModel):
     schema_version: str = "1.0"
     policy_id: str
     version: str
-    implementation: Literal["auto_proxy_v1"] = "auto_proxy_v1"
+    # Resolved through the allowlisted scoring registry.  This is deliberately
+    # a validated ID rather than an import path.
+    implementation: str = "auto_proxy_v1"
     evaluator_id: str
     evaluator_version: str
     max_analysis_edge: int = Field(ge=256, le=2048)
@@ -90,6 +93,7 @@ class ScoringPolicy(FrozenModel):
     transform_penalties: TransformPenalties = Field(default_factory=TransformPenalties)
 
     _policy_id = field_validator("policy_id")(validate_id)
+    _implementation = field_validator("implementation")(validate_id)
 
     @model_validator(mode="after")
     def valid_thresholds_and_weights(self) -> ScoringPolicy:
@@ -170,12 +174,41 @@ class StrategyBundle(FrozenModel):
     selection_policy: str
     override_policy: str
     agent_skill: str
+    prompt_bundle: str | None = None
+    detector_suite_plugin: str = "legacy_opencv_v1"
+    reference_scorer_plugin: str = "auto_proxy_v1"
+    standalone_scorer_plugin: str = "technical_no_reference_v1"
+    selector_plugin: str = "technical_risk_v1"
+    rule_selector_plugin: str = "deterministic_rule_ranking_v1"
+    agent_backend_plugin: str = "openai_compatible_vision_v1"
+    strict_review_backend_plugin: str = "openai_compatible_strict_review_v1"
+    pair_review_backend_plugin: str = "rule_anchored_pair_review_v1"
+    image_review_backend_plugin: str = "openai_compatible_image_review_v1"
 
     _strategy_id = field_validator("strategy_id")(validate_id)
+    _plugin_ids = field_validator(
+        "detector_suite_plugin",
+        "reference_scorer_plugin",
+        "standalone_scorer_plugin",
+        "selector_plugin",
+        "rule_selector_plugin",
+        "agent_backend_plugin",
+        "strict_review_backend_plugin",
+        "pair_review_backend_plugin",
+        "image_review_backend_plugin",
+    )(validate_id)
 
-    @field_validator("scoring_policy", "selection_policy", "override_policy", "agent_skill")
+    @field_validator(
+        "scoring_policy",
+        "selection_policy",
+        "override_policy",
+        "agent_skill",
+        "prompt_bundle",
+    )
     @classmethod
-    def safe_relative_reference(cls, value: str) -> str:
+    def safe_relative_reference(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         path = PurePosixPath(value.replace("\\", "/"))
         if path.is_absolute() or ".." in path.parts or not path.parts:
             raise ValueError("strategy references must remain inside the version directory")
@@ -189,6 +222,7 @@ class LoadedStrategyBundle:
     selection: SelectionPolicy
     override: OverridePolicy
     agent_skill: AgentSkill
+    prompts: LoadedPromptBundle | None
     root: Path
     source_files: tuple[Path, ...]
     file_hashes: dict[str, str]
@@ -202,7 +236,10 @@ class LoadedStrategyBundle:
             raise FileExistsError(destination)
         destination.mkdir(parents=True)
         for source in self.source_files:
-            shutil.copy2(source, destination / source.name)
+            relative = source.relative_to(self.root)
+            target = destination / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
         manifest = {
             "schema_version": "1.0",
             "strategy_id": self.bundle.strategy_id,
@@ -229,6 +266,18 @@ def load_strategy_bundle(path: Path) -> LoadedStrategyBundle:
     if not resolved.is_file():
         raise FileNotFoundError(resolved)
     bundle = StrategyBundle.model_validate(_read_mapping(resolved))
+    from .plugin_catalog import built_in_plugin_catalog
+
+    plugins = built_in_plugin_catalog()
+    plugins.detector_suites.get(bundle.detector_suite_plugin)
+    plugins.reference_scorers.get(bundle.reference_scorer_plugin)
+    plugins.standalone_scorers.get(bundle.standalone_scorer_plugin)
+    plugins.selectors.get(bundle.selector_plugin)
+    plugins.selectors.get(bundle.rule_selector_plugin)
+    plugins.agent_backends.get(bundle.agent_backend_plugin)
+    plugins.agent_backends.get(bundle.strict_review_backend_plugin)
+    plugins.agent_backends.get(bundle.pair_review_backend_plugin)
+    plugins.agent_backends.get(bundle.image_review_backend_plugin)
     root = resolved.parent
 
     def referenced(relative: str) -> Path:
@@ -245,14 +294,27 @@ def load_strategy_bundle(path: Path) -> LoadedStrategyBundle:
     selection_path = referenced(bundle.selection_policy)
     override_path = referenced(bundle.override_policy)
     skill_path = referenced(bundle.agent_skill)
-    source_files = (resolved, scoring_path, selection_path, override_path, skill_path)
-    relative_hashes = {item.name: sha256_file(item) for item in source_files}
+    prompts = None
+    prompt_files: tuple[Path, ...] = ()
+    if bundle.prompt_bundle is not None:
+        prompt_manifest = referenced(bundle.prompt_bundle)
+        prompts = load_prompt_bundle(prompt_manifest, strategy_root=root)
+        prompt_files = prompts.source_files
+    source_files = tuple(
+        dict.fromkeys(
+            (resolved, scoring_path, selection_path, override_path, skill_path, *prompt_files)
+        )
+    )
+    relative_hashes = {
+        item.relative_to(root).as_posix(): sha256_file(item) for item in source_files
+    }
     return LoadedStrategyBundle(
         bundle=bundle,
         scoring=ScoringPolicy.model_validate(_read_mapping(scoring_path)),
         selection=SelectionPolicy.model_validate(_read_mapping(selection_path)),
         override=OverridePolicy.model_validate(_read_mapping(override_path)),
         agent_skill=AgentSkill.model_validate(_read_mapping(skill_path)),
+        prompts=prompts,
         root=root,
         source_files=source_files,
         file_hashes=relative_hashes,

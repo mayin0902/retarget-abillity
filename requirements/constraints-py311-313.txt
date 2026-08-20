@@ -16,8 +16,8 @@ idna==3.19
 iniconfig==2.3.0
 markdown-it-py==4.2.0
 mdurl==0.1.2
-numpy==2.5.2
-opencv-python-headless==4.14.0.94
+numpy==2.3.5
+opencv-contrib-python==4.10.0.84
 packaging==26.3
 pillow==12.3.0
 pluggy==1.6.0
@@ -27,7 +27,7 @@ pydantic_core==2.46.4
 Pygments==2.21.0
 pytest==9.1.1
 pytest-cov==7.1.0
-PyYAML==6.0.3
+PyYAML==6.0.2
 requests==2.34.2
 rich==15.0.0
 ruff==0.16.3

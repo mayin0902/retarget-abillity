@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .hashing import sha256_json
+from .models import validate_id
 
 CN_SQUARE_METHODS = (
     "direct_warp",
@@ -42,6 +43,7 @@ class AnalysisConfig(BaseModel):
     center_weight: float = Field(default=0.20, ge=0.0)
     region_padding_ratio: float = Field(default=0.02, ge=0.0, le=0.25)
     detector_mode: Literal["disabled", "optional", "required"] = "disabled"
+    detector_suite_plugin: str = "legacy_opencv_v1"
     model_root: str = "models/analyzers"
     face_confidence_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
     object_confidence_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
@@ -51,11 +53,15 @@ class AnalysisConfig(BaseModel):
     text_max_candidates: int = Field(default=200, ge=1, le=1000)
     logo_candidate_limit: int = Field(default=24, ge=0, le=100)
 
+    _detector_suite_plugin = field_validator("detector_suite_plugin")(validate_id)
+
 
 class SelectorConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    selector_id: Literal["technical_risk_v1"] = "technical_risk_v1"
+    selector_id: str = "technical_risk_v1"
+
+    _selector_id = field_validator("selector_id")(validate_id)
 
 
 class RunConfig(BaseModel):
