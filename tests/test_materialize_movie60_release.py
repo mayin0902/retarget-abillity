@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts import materialize_movie60_release
 from scripts.materialize_movie60_release import verify_and_materialize
 
 
@@ -59,3 +60,23 @@ def test_materializer_rejects_zip_path_traversal(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="unsafe ZIP member"):
         verify_and_materialize(assets, tmp_path / "output")
+
+
+def test_existing_output_refuses_before_release_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "existing"
+    output.mkdir()
+
+    def unexpected_download(*_args, **_kwargs) -> None:
+        raise AssertionError("release download must not start")
+
+    monkeypatch.setattr(
+        materialize_movie60_release,
+        "download_release",
+        unexpected_download,
+    )
+    with pytest.raises(FileExistsError):
+        materialize_movie60_release.materialize_release(
+            "owner/repo", "tag", output
+        )

@@ -94,6 +94,26 @@ def download_release(repo: str, tag: str, destination: Path) -> None:
     subprocess.run(command, check=True)
 
 
+def materialize_release(
+    repo: str,
+    tag: str,
+    output_dir: Path,
+    *,
+    asset_dir: Path | None = None,
+) -> Path:
+    """Fail before network I/O when the immutable output already exists."""
+
+    output_dir = output_dir.resolve()
+    if output_dir.exists():
+        raise FileExistsError(output_dir)
+    if asset_dir is not None:
+        return verify_and_materialize(asset_dir, output_dir)
+    with tempfile.TemporaryDirectory(prefix="movie60-release-") as temp:
+        downloaded = Path(temp) / "assets"
+        download_release(repo, tag, downloaded)
+        return verify_and_materialize(downloaded, output_dir)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Download, hash-check and safely materialize the private Movie60 release."
@@ -111,14 +131,12 @@ def main() -> None:
         help="Use already-downloaded assets instead of GitHub (testing/offline handoff).",
     )
     args = parser.parse_args()
-    if args.asset_dir is not None:
-        output = verify_and_materialize(args.asset_dir, args.output_dir)
-        print(output)
-        return
-    with tempfile.TemporaryDirectory(prefix="movie60-release-") as temp:
-        asset_dir = Path(temp) / "assets"
-        download_release(args.repo, args.tag, asset_dir)
-        output = verify_and_materialize(asset_dir, args.output_dir)
+    output = materialize_release(
+        args.repo,
+        args.tag,
+        args.output_dir,
+        asset_dir=args.asset_dir,
+    )
     print(output)
 
 
