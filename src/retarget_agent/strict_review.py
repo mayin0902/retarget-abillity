@@ -17,6 +17,7 @@ from pydantic import Field, field_validator, model_validator
 
 from .hashing import sha256_file, sha256_json
 from .models import AnalysisArtifact, CandidateRecord, FrozenModel, RegionRecord, RunManifest
+from .prompting import LoadedPromptTemplate
 from .storage import LocalArtifactStore
 
 
@@ -476,6 +477,7 @@ class StrictVisionReviewBackend:
         model_version: str,
         timeout_seconds: float = 60.0,
         cache_path: Path | None = None,
+        prompt_template: LoadedPromptTemplate | None = None,
     ) -> None:
         parsed = urlparse(base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -486,6 +488,7 @@ class StrictVisionReviewBackend:
         self.model_version = model_version
         self.timeout_seconds = timeout_seconds
         self.cache_path = cache_path.resolve() if cache_path else None
+        self.prompt_template = prompt_template
 
     def _cache_key(
         self,
@@ -502,6 +505,9 @@ class StrictVisionReviewBackend:
                 "candidate_id": candidate_id,
                 "image_sha256": sha256_file(image),
                 "evidence": evidence,
+                "prompt_template_sha256": (
+                    self.prompt_template.source_sha256 if self.prompt_template else None
+                ),
             }
         )
 
@@ -541,7 +547,15 @@ class StrictVisionReviewBackend:
         data_url = "data:image/png;base64," + base64.b64encode(sheet_path.read_bytes()).decode(
             "ascii"
         )
-        prompt = _build_strict_review_prompt(task_id, candidate_id, evidence)
+        if self.prompt_template is None:
+            prompt = _build_strict_review_prompt(task_id, candidate_id, evidence)
+        else:
+            prompt = self.prompt_template.render(
+                task_id=task_id,
+                candidate_id=candidate_id,
+                evidence_json=json.dumps(evidence, ensure_ascii=False),
+                candidate_kind=str(evidence.get("candidate_kind") or "traditional"),
+            )
         started = time.perf_counter()
         input_tokens = 0
         output_tokens = 0

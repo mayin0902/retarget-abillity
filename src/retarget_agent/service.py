@@ -77,12 +77,7 @@ class RetargetApplicationService:
         strategy_path: Path | None = None,
         comparison_dir: Path | None = None,
     ) -> dict[str, Any]:
-        from .agents import (
-            AgentMode,
-            AgentReplayConfig,
-            OpenAICompatibleVisionBackend,
-            run_agent_replay,
-        )
+        from .agents import AgentMode, AgentReplayConfig, run_agent_replay
         from .hashing import sha256_json
         from .strategy import load_strategy_bundle
 
@@ -115,7 +110,15 @@ class RetargetApplicationService:
                 if loaded_skill is not None
                 else None
             )
-            backend = OpenAICompatibleVisionBackend(
+            from .plugin_catalog import built_in_plugin_catalog
+
+            backend_plugin_id = (
+                strategy.bundle.agent_backend_plugin
+                if strategy is not None
+                else "openai_compatible_vision_v1"
+            )
+            backend_factory = built_in_plugin_catalog().agent_backends.get(backend_plugin_id)
+            backend = backend_factory(
                 base_url=backend_url,
                 model_version=model_version,
                 api_key_env=api_key_env,
@@ -126,6 +129,11 @@ class RetargetApplicationService:
                 ),
                 skill=skill,
                 skill_sha256=skill_sha256,
+                prompt_template=(
+                    strategy.prompts.overview
+                    if strategy is not None and strategy.prompts is not None
+                    else None
+                ),
             )
         if parsed_mode is not AgentMode.HARD_RANKER and backend is None:
             raise ValueError("conditional and always-on modes require an Agent backend")
@@ -140,7 +148,10 @@ class RetargetApplicationService:
             max_agent_calls=max_agent_calls,
             fixed_method_id=fixed_method_id,
             prompt_version=(
-                f"skill:{skill.skill_id}@{skill.version}"
+                f"prompt:{strategy.prompts.overview.spec.template_id}@"
+                f"{strategy.prompts.overview.spec.version}"
+                if backend is not None and strategy is not None and strategy.prompts is not None
+                else f"skill:{skill.skill_id}@{skill.version}"
                 if backend is not None and skill is not None
                 else "judge-alias-v3"
             ),

@@ -29,8 +29,8 @@ def test_cn_square_v2_rejects_missing_legacy_candidate() -> None:
         )
 
 
-def test_cn60_v2_config_loads_with_legacy_parameters() -> None:
-    path = Path(__file__).parents[1] / "configs" / "cn60_square_v2.yaml"
+def test_movie60_config_loads_with_legacy_method_variants() -> None:
+    path = Path(__file__).parents[1] / "configs" / "movie_visual60_square_v1.yaml"
     config = load_run_config(path)
 
     assert config.methods == CN_SQUARE_SEVEN_METHODS

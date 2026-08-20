@@ -1,62 +1,60 @@
-# retarget-engine
+# retarget-abillity
 
-> 私有交接发行仓库名为 `retarget-abillity`；Python 包、命令和 Artifact 合同继续使用稳定名称
-> `retarget-engine` / `retarget_agent`，避免破坏既有 Run。
+面向简体中文海报和业务图片的本地可回放重定向引擎。Python 包和 CLI 保持兼容名称 `retarget_agent` / `retarget-engine`。
 
-面向简体中文海报和中国业务图片的可回放图片重定向引擎。当前目标画布固定为
-`1536×1536`，主流程是：共享保护分析 → 七种传统候选 → 确定性评分 → 视觉 Agent 复核 →
-受控 AIGC 回退 → 人工校准。
+主流程：共享保护分析 → 七种传统候选 → 候选逐张重检与 Rule 排名 → 视觉 Agent 挑战 → 高清 Rule-vs-challenger 门禁 → 可选 AIGC → 人工反馈。
 
 ## 当前能力
 
-- OCR、人脸、人物、商品/Logo 候选、结构与显著性共享保护分析；
-- `direct_warp`、`crop`、限额 `seam`、`seam_full`、限额 `mesh`、`mesh_full`、
-  `seam_scale` 七种候选；
-- 冻结 Generation Run、Evaluation Replay、Rule/Agent Decision、成本和资源记录；
-- Rule Top1 强制高清复核，Agent challenger 只有在视觉证据明确且保护指标不退化时才能覆盖；
-- 受预算、素材出域和幂等门禁保护的生成式回退；
-- FastAPI 本地人工评审网页，支持 60 个任务、420 个候选逐张评分和人工理由。
+- direct warp、crop、受限/完整 seam、受限/完整 mesh、seam+scale；
+- 当前 Windows CPU 检测栈：PP-OCRv6 small、D-FINE-HGNetV2-N、YuNet、Logo 候选；
+- Detector、参考/无参考 Scorer、Rule、Selector、Agent backend、Prompt 和 Skill 均为白名单插件或不可变策略文件；
+- StrategyBundle v1/v2/v2.1 与旧 Run 兼容，每次 Evaluation 保存完整策略快照；
+- 单图有参考评分、无参考技术检查、批量 Run、Agent Replay 和本地人工评审 UI。
 
-## 边界
-
-- 自动 Quality、视觉 Agent 和辅助模型建议都不是人工金标准；
-- 近期商业海报只用于本地内部评测，不随 Git 分发；
-- 当前是 Python 原型，没有生产鉴权、分布式队列或 Java 服务接口；
-- `seam_full` 与 `mesh_full` 已实现，但是否更好必须由实际图片和人评决定。
-
-## 安装
-
-新机器建议直接执行 [从零开始](docs/START_HERE.md)，它包含冻结依赖、分析模型、内部 Release
-和单图 Smoke。规则迭代见 [StrategyBundle 版本指南](docs/STRATEGY_BUNDLES.md)。
+## 从零开始
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -c requirements\constraints-py311-313.txt -e ".[dev]"
-.\.venv\Scripts\retarget-engine.exe --help
+git clone <私有仓库URL> retarget-abillity
+cd retarget-abillity
+PowerShell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1 -PythonVersion 3.12
 ```
 
-只安装依赖见 [Python 依赖安装](docs/runbooks/PYTHON_DEPENDENCIES.md)；新机器从 Clone 开始见
-[新机器安装手册](docs/runbooks/CODE_AGENT_NEW_MACHINE_SETUP.md)。
+公司 pip 镜像留空位置、Python 未安装处理和手工等价命令见 [Windows 安装](docs/runbooks/WINDOWS_INSTALL.md)。
 
-## 运行与评审
-
-- 单张图从 OCR/YOLO 到七候选、评分、Agent：
-  [单图全流程](docs/runbooks/SINGLE_IMAGE_END_TO_END.md)
-- 当前 Movie60 人工评审：双击本机
-  `deliverables/movie60-review/start-review.bat`，打开 `http://127.0.0.1:8766`
-- 全仓验证：
+## 单图
 
 ```powershell
-.\.venv\Scripts\ruff.exe check src tests scripts
+PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
+  -InputImage "D:\images\poster.jpg" -CaseId "poster-001"
+```
+
+单独评分已有候选：
+
+```powershell
+.\.venv\Scripts\retarget-engine.exe score reference source.jpg candidate.jpg `
+  --output-dir local_data\scores\poster-001 `
+  --strategy strategies\movie60\v2_1\bundle.yaml
+```
+
+完整命令见 [单张与批量运行](docs/runbooks/RUN_ONE_OR_BATCH.md)。
+
+## 文档
+
+- [交接大纲](docs/HANDOFF_OUTLINE.md)
+- [开发交接详细讲义](docs/HANDOFF_DETAILED_GUIDE.md)
+- [插件与策略迭代](docs/PLUGIN_STRATEGY_GUIDE.md)
+- [七种算法](docs/ALGORITHMS.md)
+- [人工评审](docs/REVIEW_GUIDE.md)
+- [数据与结果边界](docs/DATA_AND_RESULTS.md)
+- [当前 Movie60 技术结果](docs/reports/MOVIE60_STRICT_END_TO_END_REPORT.md)
+
+## 验证
+
+```powershell
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m ruff check src scripts tests
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-## 文档入口
-
-不要逐个猜文档版本。统一从 [docs/README.md](docs/README.md) 开始；开发交接看
-[docs/HANDOFF.md](docs/HANDOFF.md)，数据、图片、Run 和 Git 边界看
-[docs/DATA_AND_RESULTS.md](docs/DATA_AND_RESULTS.md)，当前实验结果看
-[Movie60 技术报告](docs/reports/MOVIE60_STRICT_END_TO_END_REPORT.md)。
-
-工程来源见 [ORIGIN.md](ORIGIN.md)，领域语言见 [CONTEXT.md](CONTEXT.md)。
+自动分数和 Agent 建议不是人工金标准；真实商业素材、Run、模型权重和密钥不进入 Git。

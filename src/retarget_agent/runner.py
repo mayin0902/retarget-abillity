@@ -29,18 +29,23 @@ from .models import (
     TaskSpec,
     TransformRecord,
 )
-from .selector import select_by_technical_risk
 from .storage import LocalArtifactStore
 from .visualization import comparison_grid
 
 DEPENDENCIES = (
     "numpy",
-    "opencv-python-headless",
+    "opencv-contrib-python",
     "Pillow",
     "psutil",
     "pydantic",
     "PyYAML",
     "typer",
+    "paddleocr",
+    "paddlepaddle",
+    "onnxruntime",
+    "torch",
+    "torchvision",
+    "transformers",
 )
 
 
@@ -130,6 +135,9 @@ class GenerationRunner:
         store.write_json("run.json", manifest, overwrite=True)
         events.append_run(manifest)
         analyzer = SharedProtectionAnalyzer(dataset_root, config.analysis)
+        from .plugin_catalog import built_in_plugin_catalog
+
+        selector = built_in_plugin_catalog().selectors.get(config.selector.selector_id)
         all_candidates: list[CandidateRecord] = []
         failed_candidates: list[CandidateRecord] = []
         context = ExecutionContext(run_id=config.run_id, run_root=str(run_dir), device="cpu")
@@ -162,7 +170,7 @@ class GenerationRunner:
                     failed_candidates.append(candidate)
                 if transform is not None:
                     task_transforms[candidate.candidate_id] = transform
-            decision = select_by_technical_risk(
+            decision = selector(
                 task, config.run_id, task_candidates, task_transforms
             )
             store.write_json(

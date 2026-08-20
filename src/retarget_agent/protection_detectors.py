@@ -8,6 +8,8 @@ licenses, byte sizes and SHA-256 values live in
 from __future__ import annotations
 
 import ast
+import importlib.metadata
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -16,7 +18,7 @@ import cv2
 import numpy as np
 
 from .config import AnalysisConfig
-from .hashing import sha256_file
+from .hashing import sha256_file, sha256_json
 from .models import Rect, RegionKind, RegionRecord
 
 COCO_CLASSES = (
@@ -161,6 +163,28 @@ MODEL_FILES = {
     "text_crnn_charset": "crnn.py",
     "object_yolox": "object_detection_yolox_2022nov.onnx",
 }
+
+
+def directory_audit(root: Path) -> dict[str, Any]:
+    """Content audit for one local model directory without executing its files."""
+
+    if not root.is_dir():
+        raise FileNotFoundError(root)
+    files = sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and not {".locks", ".cache", ".no_exist"}.intersection(path.parts)
+        and path.name != "CACHEDIR.TAG"
+    )
+    hashes = {path.relative_to(root).as_posix(): sha256_file(path) for path in files}
+    return {
+        "path": str(root),
+        "file_count": len(files),
+        "total_bytes": sum(path.stat().st_size for path in files),
+        "content_sha256": sha256_json(hashes),
+        "files": hashes,
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -534,6 +558,256 @@ class ProtectionDetectorSuite:
                         for x1, y1, x2, y2 in protected_bounds
                     )
                     if already_protected:
+                        continue
+                else:
+                    protected_bounds.append(detection.rect)
+                rectangle = _rect(detection.rect, width, height, padding_ratio)
+                if rectangle is None:
+                    continue
+                index = counts.get(detection.detector_id, 0)
+                counts[detection.detector_id] = index + 1
+                records.append(
+                    RegionRecord(
+                        region_id=f"{detection.detector_id}-{index:03d}",
+                        kind=detection.kind,
+                        rect=rectangle,
+                        importance=detection.importance,
+                        tolerance=detection.tolerance,
+                        confidence=max(0.0, min(1.0, detection.confidence)),
+                        source=detection.detector_id,
+                        label=detection.label,
+                        attributes=detection.attributes,
+                    )
+                )
+        return tuple(records)
+
+
+class PaddleOcrV6SmallDetector:
+    """PP-OCRv6 small adapter using PaddleOCR's documented local pipeline API."""
+
+    detector_id = "text_ppocrv6_small"
+    detection_model_name = "PP-OCRv6_small_det"
+    recognition_model_name = "PP-OCRv6_small_rec"
+
+    def __init__(self) -> None:
+        try:
+            from paddleocr import PaddleOCR
+        except ImportError as error:
+            raise RuntimeError(
+                "company_cpu_v2 requires the optional company-model dependencies; "
+                "follow docs/runbooks/WINDOWS_INSTALL.md"
+            ) from error
+        self.pipeline = PaddleOCR(
+            text_detection_model_name=self.detection_model_name,
+            text_recognition_model_name=self.recognition_model_name,
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+            device="cpu",
+            engine="onnxruntime",
+        )
+        cache_root = Path.home() / ".paddlex" / "official_models"
+        self.model_audits = (
+            directory_audit(cache_root / f"{self.detection_model_name}_onnx"),
+            directory_audit(cache_root / f"{self.recognition_model_name}_onnx"),
+        )
+
+    @staticmethod
+    def _payload(item: Any) -> dict[str, Any]:
+        payload = getattr(item, "json", item)
+        if callable(payload):
+            payload = payload()
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        if not isinstance(payload, dict):
+            raise ValueError("PP-OCRv6 returned an unsupported result object")
+        nested = payload.get("res")
+        return nested if isinstance(nested, dict) else payload
+
+    def detect(self, image_rgb: np.ndarray) -> list[Detection]:
+        results = self.pipeline.predict(image_rgb)
+        detections: list[Detection] = []
+        for item in results:
+            payload = self._payload(item)
+            polygons = payload.get("rec_polys") or payload.get("dt_polys") or []
+            texts = payload.get("rec_texts") or []
+            scores = payload.get("rec_scores") or []
+            for index, polygon in enumerate(polygons):
+                vertices = np.asarray(polygon, dtype=np.float32).reshape(-1, 2)
+                if vertices.shape[0] < 4:
+                    continue
+                x1, y1 = np.min(vertices, axis=0)
+                x2, y2 = np.max(vertices, axis=0)
+                text = str(texts[index]) if index < len(texts) else ""
+                confidence = float(scores[index]) if index < len(scores) else 0.0
+                detections.append(
+                    Detection(
+                        detector_id=self.detector_id,
+                        label="text",
+                        rect=(float(x1), float(y1), float(x2), float(y2)),
+                        confidence=max(0.0, min(1.0, confidence)),
+                        kind=RegionKind.MUST_KEEP,
+                        importance=1.0,
+                        tolerance=0.0,
+                        attributes={
+                            "semantic_type": "text",
+                            "recognized_text": text,
+                            "recognition_confidence": round(confidence, 6),
+                            "quadrilateral_xy": vertices.round(2).tolist(),
+                            "model_family": "PP-OCRv6-small",
+                        },
+                    )
+                )
+        return detections
+
+
+class DFineNanoDetector:
+    """Apache-2.0 D-FINE nano COCO adapter through Transformers."""
+
+    detector_id = "object_dfine_hgnetv2_n"
+    model_id = "ustc-community/dfine-nano-coco"
+    model_revision = "066438d3d8f0da137a37b38fdf3368fd4afceced"
+
+    def __init__(self, config: AnalysisConfig, *, local_files_only: bool = True) -> None:
+        try:
+            import torch
+            from transformers import AutoImageProcessor, DFineForObjectDetection
+        except ImportError as error:
+            raise RuntimeError(
+                "company_cpu_v2 requires the optional company-model dependencies; "
+                "follow docs/runbooks/WINDOWS_INSTALL.md"
+            ) from error
+        cache_dir = Path(config.model_root).resolve() / "company_cpu_v2" / "huggingface"
+        kwargs = {
+            "revision": self.model_revision,
+            "cache_dir": str(cache_dir),
+            "local_files_only": local_files_only,
+        }
+        self.processor = AutoImageProcessor.from_pretrained(self.model_id, **kwargs)
+        self.model = DFineForObjectDetection.from_pretrained(self.model_id, **kwargs)
+        self.model.to("cpu").eval()
+        self.torch = torch
+        self.confidence_threshold = config.object_confidence_threshold
+
+    def detect(self, image_rgb: np.ndarray) -> list[Detection]:
+        from PIL import Image
+
+        image = Image.fromarray(image_rgb)
+        inputs = self.processor(images=image, return_tensors="pt")
+        with self.torch.inference_mode():
+            outputs = self.model(**inputs)
+        results = self.processor.post_process_object_detection(
+            outputs,
+            target_sizes=[(image.height, image.width)],
+            threshold=self.confidence_threshold,
+        )[0]
+        id_to_label = getattr(self.model.config, "id2label", {})
+        detections: list[Detection] = []
+        for score, label_id, box in zip(
+            results["scores"], results["labels"], results["boxes"], strict=True
+        ):
+            confidence = float(score.item())
+            class_id = int(label_id.item())
+            label = str(id_to_label.get(class_id, class_id)).lower()
+            x1, y1, x2, y2 = (float(value) for value in box.tolist())
+            semantic_type = "person" if label == "person" else "object"
+            if label in PRODUCT_CLASSES:
+                semantic_type = "product"
+            kind = (
+                RegionKind.MUST_KEEP
+                if semantic_type == "person"
+                else RegionKind.RIGID
+                if semantic_type == "product"
+                else RegionKind.PREFER_KEEP
+            )
+            importance = (
+                0.98
+                if semantic_type == "person"
+                else 0.92
+                if semantic_type == "product"
+                else 0.78
+            )
+            detections.append(
+                Detection(
+                    detector_id=self.detector_id,
+                    label=label,
+                    rect=(x1, y1, x2, y2),
+                    confidence=confidence,
+                    kind=kind,
+                    importance=importance,
+                    tolerance=max(0.0, 1.0 - importance),
+                    attributes={
+                        "semantic_type": semantic_type,
+                        "coco_class_id": class_id,
+                        "model_family": "D-FINE-HGNetV2-N",
+                    },
+                )
+            )
+        return detections
+
+
+class CompanyCpuProtectionDetectorSuite:
+    """Current Windows-CPU detector profile; the sole new-developer default."""
+
+    suite_id = "company_cpu_v2"
+    suite_version = "2.0.0"
+
+    def __init__(self, config: AnalysisConfig, *, allow_model_download: bool = False) -> None:
+        root = Path(config.model_root).resolve()
+        face_path = root / MODEL_FILES["face_yunet"]
+        if not face_path.is_file():
+            raise FileNotFoundError(
+                f"missing YuNet model: {face_path}; run scripts/materialize_analyzer_models.py"
+            )
+        self.detectors = (
+            PaddleOcrV6SmallDetector(),
+            FaceDetector(face_path, config.face_confidence_threshold),
+            DFineNanoDetector(config, local_files_only=not allow_model_download),
+            LogoCandidateDetector(config.logo_candidate_limit),
+        )
+        package_versions = []
+        for package in (
+            "paddleocr",
+            "paddlepaddle",
+            "onnxruntime",
+            "transformers",
+            "torch",
+            "torchvision",
+        ):
+            try:
+                package_versions.append(f"{package}={importlib.metadata.version(package)}")
+            except importlib.metadata.PackageNotFoundError:
+                package_versions.append(f"{package}=missing")
+        ocr = self.detectors[0]
+        ocr_digest = sha256_json(
+            [item["content_sha256"] for item in ocr.model_audits]  # type: ignore[attr-defined]
+        )
+        self.model_audits = (  # type: ignore[attr-defined]
+            *ocr.model_audits,
+            directory_audit(root / "company_cpu_v2" / "huggingface"),
+        )
+        self.analyzer_ids = (
+            f"text_ppocrv6_small:{ocr_digest[:12]}:onnxruntime",
+            f"face_yunet:{sha256_file(face_path)[:12]}",
+            f"object_dfine_hgnetv2_n:{DFineNanoDetector.model_revision[:12]}",
+            f"logo_candidate_cv:{self.suite_version}",
+            "runtime:" + ",".join(package_versions),
+        )
+
+    def detect(self, image_rgb: np.ndarray, padding_ratio: float) -> tuple[RegionRecord, ...]:
+        height, width = image_rgb.shape[:2]
+        records: list[RegionRecord] = []
+        counts: dict[str, int] = {}
+        protected_bounds: list[tuple[float, float, float, float]] = []
+        for detector in self.detectors:
+            for detection in detector.detect(image_rgb):
+                if detection.detector_id == "logo_candidate_cv":
+                    center_x = (detection.rect[0] + detection.rect[2]) / 2
+                    center_y = (detection.rect[1] + detection.rect[3]) / 2
+                    if any(
+                        x1 <= center_x <= x2 and y1 <= center_y <= y2
+                        for x1, y1, x2, y2 in protected_bounds
+                    ):
                         continue
                 else:
                     protected_bounds.append(detection.rect)

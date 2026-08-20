@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 - 2026-08-20
+
+- Add allowlisted registries for detector suites, reference/no-reference scorers, selectors and
+  Agent backends; strategy files choose implementations without importing arbitrary Python paths.
+- Add immutable Movie60 StrategyBundle v2.1 with external, hashed prompt templates while retaining
+  v1/v2 loading and replay compatibility.
+- Add the CPU-first `company_cpu_v2` profile: PP-OCRv6 small through ONNX Runtime, pinned D-FINE
+  Nano, YuNet and logo-candidate analysis, plus auditable model materialization.
+- Add standalone candidate scoring and source-versus-candidate scoring with JSON, Markdown,
+  overlays, strategy snapshots and optional image-review Agent output.
+- Replace the accumulated setup notes with a clean Windows installation, single/batch run,
+  plug-in strategy and developer handoff path.
+
 ## 0.3.0 - 2026-08-20
 
 - Add immutable StrategyBundle v1/v2 directories for scoring, Rule ranking, override gates and
