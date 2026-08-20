@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import pytest
 import yaml
 
 from retarget_agent.config import RunConfig
@@ -118,3 +119,31 @@ def test_one_method_failure_does_not_block_other_methods(tmp_path: Path) -> None
     ]
     assert len(records) == 10
     assert sum(record.output is not None for record in records) == 8
+
+
+def test_run_marks_manifest_failed_when_analyzer_cannot_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dataset = _two_task_dataset(tmp_path / "dataset")
+    config_path = tmp_path / "config.yaml"
+    raw = {
+        "dataset_root": str(dataset),
+        "output_root": str(tmp_path / "runs"),
+        "run_id": "analyzer-failure-run",
+    }
+    config_path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    def fail_to_start(*_args, **_kwargs):
+        raise FileNotFoundError("missing pinned detector model")
+
+    monkeypatch.setattr("retarget_agent.runner.SharedProtectionAnalyzer", fail_to_start)
+
+    with pytest.raises(FileNotFoundError, match="missing pinned detector model"):
+        GenerationRunner.default().run(RunConfig.model_validate(raw), config_path)
+
+    manifest = RunManifest.model_validate_json(
+        (tmp_path / "runs/analyzer-failure-run/run.json").read_text(encoding="utf-8")
+    )
+    assert manifest.status == "FAILED"
+    assert manifest.completed_at is not None

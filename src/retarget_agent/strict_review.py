@@ -180,8 +180,16 @@ def _apply_evidence_grade_caps(
         MachineGrade.C: 2,
         MachineGrade.D: 3,
     }
-    subject_grade = max((review.subject.grade, floor), key=lambda grade: rank[grade])
-    overall_grade = max((review.overall_grade, floor), key=lambda grade: rank[grade])
+    subject_grade = (
+        floor
+        if review.subject.grade is MachineGrade.NA
+        else max((review.subject.grade, floor), key=lambda grade: rank[grade])
+    )
+    overall_grade = (
+        floor
+        if review.overall_grade is MachineGrade.NA
+        else max((review.overall_grade, floor), key=lambda grade: rank[grade])
+    )
     codes = tuple(dict.fromkeys((*review.subject.reason_codes, "global_stretch")))[:4]
     subject = review.subject.model_copy(
         update={

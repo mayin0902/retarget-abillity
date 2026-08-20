@@ -74,7 +74,7 @@ def score_reference(
     strategy: Annotated[
         Path,
         typer.Option("--strategy", exists=True, dir_okay=False),
-    ] = Path("strategies/movie60/v2_1/bundle.yaml"),
+    ] = Path("strategies/movie60/v3_2_2/bundle.yaml"),
     agent_backend_url: Annotated[
         str | None, typer.Option("--agent-backend-url")
     ] = None,
@@ -107,7 +107,7 @@ def score_standalone(
     strategy: Annotated[
         Path,
         typer.Option("--strategy", exists=True, dir_okay=False),
-    ] = Path("strategies/movie60/v2_1/bundle.yaml"),
+    ] = Path("strategies/movie60/v3_2_2/bundle.yaml"),
     agent_backend_url: Annotated[
         str | None, typer.Option("--agent-backend-url")
     ] = None,

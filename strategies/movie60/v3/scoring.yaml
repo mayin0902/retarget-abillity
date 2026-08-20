@@ -1,0 +1,54 @@
+schema_version: "1.0"
+policy_id: movie60-scoring-v3
+version: "3.0.0"
+implementation: human_aligned_proxy_v3
+evaluator_id: movie60-human-aligned-proxy-v3
+evaluator_version: "3.0.0"
+max_analysis_edge: 1024
+proxy_a_threshold: 88.0
+proxy_b_threshold: 68.0
+proxy_c_threshold: 52.0
+critical_text_recall: 0.70
+blank_std_threshold: 1.5
+prominent_face_confidence: 0.75
+prominent_face_area_ratio: 0.015
+direct_warp_proxy_a_cap_d_stretch: null
+direct_warp_proxy_c_cap_d_stretch: null
+total_weights: {content: 0.55, integrity: 0.30, composition: 0.15}
+text_weights: {character_recall: 0.65, sequence_similarity: 0.35}
+content_weights:
+  {feature: 0.25, text: 0.35, face: 0.20, person: 0.20, product: 0.20, logo: 0.10, object: 0.20}
+integrity_weights:
+  {sharpness: 0.25, edge_density: 0.20, color: 0.15, structure_lines: 0.20, transform_safety: 0.20}
+composition_weights: {protected_border: 0.60, visual_center: 0.40}
+transform_penalties:
+  {direct_warp_stretch: 0.30, crop_cut_must_keep: 1.0, seam_importance: 1.2, seam_anisotropy: 0.4, mesh_anisotropy: 0.45, mesh_foldover: 8.0}
+human_alignment:
+  enabled: true
+  hard_failure_outcome: D
+  score_adjustments:
+    - {adjustment_id: person_scene_prior, amount: 6.0, scenes: [person]}
+    - {adjustment_id: direct_warp_soft_prior, amount: 3.0, methods: [direct_warp]}
+    - {adjustment_id: seam_soft_prior, amount: 2.0, methods: [seam]}
+    - {adjustment_id: seam_full_risk_prior, amount: -4.0, methods: [seam_full]}
+  regression_penalties:
+    - {regression_code: critical_text_missing, amount: -3.0}
+    - {regression_code: severe_global_stretch, amount: -2.0}
+    - {regression_code: prominent_face_not_redetected, amount: -5.0}
+  gates:
+    - gate_id: main_person_almost_missing
+      outcome: D
+      conditions: [{metric: person_count_preservation, operator: lt, threshold: 0.20}]
+    - gate_id: prominent_face_almost_missing
+      outcome: D
+      conditions: [{metric: face_count_preservation, operator: lt, threshold: 0.20}]
+    - gate_id: main_person_major_loss
+      outcome: C
+      conditions: [{metric: person_count_preservation, operator: lt, threshold: 0.45}]
+    - gate_id: prominent_face_major_loss
+      outcome: C
+      conditions: [{metric: face_count_preservation, operator: lt, threshold: 0.45}]
+    - gate_id: poster_or_still_seam_full_visual_risk
+      outcome: C
+      scenes: [movie_poster, film_still]
+      methods: [seam_full]

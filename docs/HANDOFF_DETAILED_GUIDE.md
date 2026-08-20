@@ -154,7 +154,7 @@ Composition = weighted(protected_border_safety, visual_center_score)
 Quality = 100 × weighted(Content, Integrity, Composition)
 ```
 
-当前 `v2_1` 与 v2 保持同一范围：A≥90、B≥72、C≥60、D<60。范围和每层权重都在 `scoring.yaml`，下个策略版本可修改，例如把 A 改为 80；旧 Evaluation 内的快照不受影响。
+当前活动 `v3_2` 的范围为 A≥90、B≥65、C≥50、D<50，再叠加声明式 C/D 门禁。范围和每层权重都在 `scoring.yaml`，下个策略版本可修改，例如把 A 改为 80；旧 Evaluation 内的快照不受影响。
 
 `proxy_grade` 是未校准的机器代理等级，不等于人工真值。
 
@@ -162,8 +162,8 @@ Quality = 100 × weighted(Content, Integrity, Composition)
 
 1. Rule 先给出全部候选的完整排名，不只是 Top1；
 2. Agent 看到 SOURCE、候选总览、Rule Top1、完整排名和结构化指标；
-3. Agent 可以提出一个 challenger，但不能直接覆盖 Rule；
-4. Rule Top1 与 challenger 分别进入高清复核，并为海报/人物/商品提供文字框、人物框和商品框局部；
+3. Agent 可以从完整七候选排名提出最多两个经像素哈希去重的 challenger，但不能绕过门禁直接覆盖 Rule；
+4. Rule Top1 与每名 challenger 分别进入高清复核，并为海报/人物/商品提供文字框、人物框和商品框局部；
 5. `core_content_preserved=false`、关键文字召回下降、主体数量下降或证据矛盾时，保留可用的 Rule A/B；
 6. 只有明确视觉改善且内容门禁通过，才允许 Agent 覆盖；否则回退 Rule；
 7. 所有自由文本理由要求简体中文。
@@ -177,7 +177,7 @@ Prompt 和 Skill 都位于策略目录，不在 Python 中作为当前默认硬�
 | 接口 | 当前 ID | 替换时改什么 |
 |---|---|---|
 | DetectorSuite | `company_cpu_v2` | 新 Adapter + 注册 + 新策略版本 |
-| ReferenceScorer | `auto_proxy_v1` | 新评分实现 + 注册 |
+| ReferenceScorer | `human_aligned_proxy_v3` | 新评分实现 + 注册 |
 | StandaloneScorer | `technical_no_reference_v1` | 新无参考实现 + 注册 |
 | Rule selector | `deterministic_rule_ranking_v1` | 新排序实现 + 注册 |
 | Agent backend | `openai_compatible_*` | 新后端 Adapter + 注册 |
@@ -193,7 +193,7 @@ Prompt 和 Skill 都位于策略目录，不在 Python 中作为当前默认硬�
 1. 冻结 Calibration 人工评分；
 2. 统计人工不同等级 pair 的排序正确率；人工同级 pair 只统计机器分差；
 3. 确认误差来自模型漏检、指标权重、硬门禁、Prompt 或 Skill；
-4. 复制 `strategies/movie60/v2_1` 为新目录；
+4. 复制 `strategies/movie60/v3_2` 为新目录；
 5. 修改 version、parent、规则或实现 ID；
 6. `retarget-engine strategy diff` 检查变化；
 7. 用新 Evaluation ID 跑 Calibration；确定后冻结；

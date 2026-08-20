@@ -1,0 +1,22 @@
+schema_version: "1.0"
+strategy_id: movie60
+version: "3.2.0"
+status: frozen
+parent_strategy: movie60@3.1.0
+description: >-
+  Human-preference candidate with combined scene gates and a two-challenger visual Agent.
+  It prioritizes C/D recall without turning aspect, color, ORB or OCR misses into standalone gates.
+scoring_policy: scoring.yaml
+selection_policy: selection.yaml
+override_policy: override.yaml
+agent_skill: agent-skill.yaml
+prompt_bundle: prompts/bundle.yaml
+detector_suite_plugin: company_cpu_v2
+reference_scorer_plugin: human_aligned_proxy_v3
+standalone_scorer_plugin: technical_no_reference_v1
+selector_plugin: technical_risk_v1
+rule_selector_plugin: deterministic_rule_ranking_v1
+agent_backend_plugin: openai_compatible_vision_v1
+strict_review_backend_plugin: openai_compatible_strict_review_v1
+pair_review_backend_plugin: rule_anchored_pair_review_v1
+image_review_backend_plugin: openai_compatible_image_review_v1

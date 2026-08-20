@@ -1,0 +1,204 @@
+schema_version: "1.0"
+policy_id: movie60-scoring-v3-2
+version: "3.2.0"
+implementation: human_aligned_proxy_v3
+evaluator_id: movie60-human-aligned-proxy-v3
+evaluator_version: "3.2.0"
+max_analysis_edge: 1024
+proxy_a_threshold: 90.0
+proxy_b_threshold: 65.0
+proxy_c_threshold: 50.0
+critical_text_recall: 0.70
+blank_std_threshold: 1.5
+prominent_face_confidence: 0.75
+prominent_face_area_ratio: 0.015
+direct_warp_proxy_a_cap_d_stretch: null
+direct_warp_proxy_c_cap_d_stretch: null
+total_weights: {content: 0.58, integrity: 0.32, composition: 0.10}
+text_weights: {character_recall: 0.65, sequence_similarity: 0.35}
+content_weights:
+  {feature: 0.25, text: 0.35, face: 0.20, person: 0.20, product: 0.20, logo: 0.10, object: 0.20}
+integrity_weights:
+  {sharpness: 0.25, edge_density: 0.20, color: 0.15, structure_lines: 0.20, transform_safety: 0.20}
+composition_weights: {protected_border: 0.60, visual_center: 0.40}
+transform_penalties:
+  {direct_warp_stretch: 0.30, crop_cut_must_keep: 1.0, seam_importance: 1.2, seam_anisotropy: 0.4, mesh_anisotropy: 0.45, mesh_foldover: 8.0}
+human_alignment:
+  enabled: true
+  hard_failure_outcome: D
+  score_adjustments:
+    - {adjustment_id: person_scene_prior, amount: 8.0, scenes: [person]}
+    - {adjustment_id: video_cover_scene_prior, amount: 2.0, scenes: [video_cover]}
+    - {adjustment_id: direct_warp_soft_prior, amount: 6.0, methods: [direct_warp]}
+    - {adjustment_id: seam_soft_prior, amount: 5.0, methods: [seam]}
+    - {adjustment_id: seam_scale_soft_prior, amount: 3.0, methods: [seam_scale]}
+    - {adjustment_id: mesh_full_soft_prior, amount: 1.0, methods: [mesh_full]}
+    - {adjustment_id: seam_full_risk_prior, amount: -8.0, methods: [seam_full]}
+  regression_penalties:
+    - {regression_code: critical_text_missing, amount: -2.0}
+    - {regression_code: severe_global_stretch, amount: -2.0}
+    - {regression_code: prominent_face_not_redetected, amount: -5.0}
+  gates:
+    - gate_id: main_person_almost_missing
+      outcome: D
+      conditions: [{metric: person_count_preservation, operator: lt, threshold: 0.20}]
+    - gate_id: prominent_face_almost_missing
+      outcome: D
+      conditions: [{metric: face_count_preservation, operator: lt, threshold: 0.20}]
+    - gate_id: main_person_major_loss
+      outcome: C
+      conditions: [{metric: person_count_preservation, operator: lt, threshold: 0.45}]
+    - gate_id: prominent_face_major_loss
+      outcome: C
+      conditions: [{metric: face_count_preservation, operator: lt, threshold: 0.45}]
+    - gate_id: poster_or_still_seam_full_visual_risk
+      outcome: C
+      scenes: [movie_poster, film_still]
+      methods: [seam_full]
+    - gate_id: film_still_crop_relationship_loss
+      outcome: D
+      scenes: [film_still]
+      methods: [crop]
+      conditions:
+        - {metric: face_count_preservation, operator: lt, threshold: 0.60}
+        - {metric: person_count_preservation, operator: lt, threshold: 0.75}
+    - gate_id: film_still_mesh_content_loss
+      outcome: C
+      scenes: [film_still]
+      methods: [mesh, mesh_full]
+      conditions:
+        - {metric: content_fidelity_score, operator: lt, threshold: 0.62}
+        - {metric: person_count_preservation, operator: lt, threshold: 0.70}
+    - gate_id: poster_crop_primary_block_risk
+      outcome: C
+      scenes: [movie_poster]
+      methods: [crop]
+      conditions:
+        - {metric: transform_safety_score, operator: lte, threshold: 0.02}
+        - {metric: logo_count_preservation, operator: lt, threshold: 0.75}
+    - gate_id: video_crop_integrity_loss
+      outcome: C
+      scenes: [video_cover]
+      methods: [crop]
+      conditions:
+        - {metric: content_fidelity_score, operator: lt, threshold: 0.70}
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.65}
+    - gate_id: video_mesh_logo_loss
+      outcome: C
+      scenes: [video_cover]
+      methods: [mesh]
+      conditions:
+        - {metric: logo_count_preservation, operator: lt, threshold: 0.70}
+    - gate_id: video_mesh_full_text_loss
+      outcome: C
+      scenes: [video_cover]
+      methods: [mesh_full]
+      conditions:
+        - {metric: ocr_character_recall, operator: lt, threshold: 0.40}
+    - gate_id: video_seam_full_combined_loss
+      outcome: C
+      scenes: [video_cover]
+      methods: [seam_full]
+      conditions:
+        - {metric: ocr_character_recall, operator: lt, threshold: 0.45}
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.80}
+    - gate_id: poster_seam_full_release_accident
+      outcome: D
+      scenes: [movie_poster]
+      methods: [seam_full]
+      conditions:
+        - {metric: color_histogram_similarity, operator: lt, threshold: 0.86}
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.82}
+    - gate_id: film_still_seam_full_release_accident
+      outcome: D
+      scenes: [film_still]
+      methods: [seam_full]
+      conditions:
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.70}
+        - {metric: person_count_preservation, operator: lt, threshold: 0.70}
+    - gate_id: poster_mesh_subject_or_text_loss
+      outcome: C
+      scenes: [movie_poster]
+      methods: [mesh, mesh_full]
+      conditions:
+        - {metric: ocr_character_recall, operator: lt, threshold: 0.42}
+        - {metric: person_count_preservation, operator: lt, threshold: 0.90}
+    - gate_id: poster_seam_scale_local_risk
+      outcome: C
+      scenes: [movie_poster]
+      methods: [seam_scale]
+      conditions:
+        - {metric: transform_safety_score, operator: lt, threshold: 0.30}
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.82}
+    - gate_id: film_still_seam_scale_relation_risk
+      outcome: C
+      scenes: [film_still]
+      methods: [seam_scale]
+      conditions:
+        - {metric: content_fidelity_score, operator: lt, threshold: 0.70}
+        - {metric: person_count_preservation, operator: lt, threshold: 0.60}
+    - gate_id: video_seam_scale_combined_loss
+      outcome: C
+      scenes: [video_cover]
+      methods: [seam_scale]
+      conditions:
+        - {metric: ocr_character_recall, operator: lt, threshold: 0.35}
+        - {metric: logo_count_preservation, operator: lt, threshold: 0.75}
+    - gate_id: person_mesh_visible_integrity_loss
+      outcome: C
+      scenes: [person]
+      methods: [mesh]
+      conditions:
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.68}
+    - gate_id: poster_crop_visible_integrity_loss
+      outcome: C
+      scenes: [movie_poster]
+      methods: [crop]
+      conditions:
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.62}
+    - gate_id: poster_crop_logo_and_layout_loss
+      outcome: C
+      scenes: [movie_poster]
+      methods: [crop]
+      conditions:
+        - {metric: transform_safety_score, operator: lte, threshold: 0.02}
+        - {metric: logo_count_preservation, operator: lt, threshold: 0.85}
+    - gate_id: poster_mesh_primary_instance_loss
+      outcome: C
+      scenes: [movie_poster]
+      methods: [mesh, mesh_full]
+      conditions:
+        - {metric: person_count_preservation, operator: lt, threshold: 0.75}
+        - {metric: face_count_preservation, operator: lt, threshold: 0.75}
+    - gate_id: poster_seam_primary_instance_loss
+      outcome: C
+      scenes: [movie_poster]
+      methods: [seam]
+      conditions:
+        - {metric: person_count_preservation, operator: lt, threshold: 0.75}
+    - gate_id: poster_seam_scale_logo_risk
+      outcome: C
+      scenes: [movie_poster]
+      methods: [seam_scale]
+      conditions:
+        - {metric: logo_count_preservation, operator: lt, threshold: 0.75}
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.82}
+    - gate_id: film_still_crop_face_integrity_loss
+      outcome: C
+      scenes: [film_still]
+      methods: [crop]
+      conditions:
+        - {metric: face_count_preservation, operator: lte, threshold: 0.50}
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.60}
+    - gate_id: video_crop_visible_integrity_loss
+      outcome: C
+      scenes: [video_cover]
+      methods: [crop]
+      conditions:
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.65}
+    - gate_id: video_seam_scale_integrity_loss
+      outcome: C
+      scenes: [video_cover]
+      methods: [seam_scale]
+      conditions:
+        - {metric: visual_integrity_score, operator: lt, threshold: 0.65}

@@ -134,54 +134,80 @@ class GenerationRunner:
         )
         store.write_json("run.json", manifest, overwrite=True)
         events.append_run(manifest)
-        analyzer = SharedProtectionAnalyzer(dataset_root, config.analysis)
-        from .plugin_catalog import built_in_plugin_catalog
-
-        selector = built_in_plugin_catalog().selectors.get(config.selector.selector_id)
         all_candidates: list[CandidateRecord] = []
         failed_candidates: list[CandidateRecord] = []
-        context = ExecutionContext(run_id=config.run_id, run_root=str(run_dir), device="cpu")
+        try:
+            analyzer = SharedProtectionAnalyzer(dataset_root, config.analysis)
+            from .plugin_catalog import built_in_plugin_catalog
 
-        for task in validation.tasks:
-            image_path = dataset_root / task.source.image_path
-            image = _load_rgb(image_path)
-            self._freeze_task_input(task, image_path, store)
-            analysis, importance, tolerance = self._analysis_for_task(
-                analyzer, task, image, config, store
+            selector = built_in_plugin_catalog().selectors.get(
+                config.selector.selector_id
             )
-            task_candidates: list[CandidateRecord] = []
-            task_transforms: dict[str, TransformRecord] = {}
-            for method_id in config.methods:
-                candidate, transform = self._candidate_for_method(
-                    task,
-                    image,
-                    analysis,
-                    importance,
-                    tolerance,
-                    method_id,
-                    config,
-                    context,
-                    store,
-                    events,
+            context = ExecutionContext(
+                run_id=config.run_id,
+                run_root=str(run_dir),
+                device="cpu",
+            )
+
+            for task in validation.tasks:
+                image_path = dataset_root / task.source.image_path
+                image = _load_rgb(image_path)
+                self._freeze_task_input(task, image_path, store)
+                analysis, importance, tolerance = self._analysis_for_task(
+                    analyzer, task, image, config, store
                 )
-                task_candidates.append(candidate)
-                all_candidates.append(candidate)
-                if candidate.generation_status == GenerationStatus.FAILED:
-                    failed_candidates.append(candidate)
-                if transform is not None:
-                    task_transforms[candidate.candidate_id] = transform
-            decision = selector(
-                task, config.run_id, task_candidates, task_transforms
+                task_candidates: list[CandidateRecord] = []
+                task_transforms: dict[str, TransformRecord] = {}
+                for method_id in config.methods:
+                    candidate, transform = self._candidate_for_method(
+                        task,
+                        image,
+                        analysis,
+                        importance,
+                        tolerance,
+                        method_id,
+                        config,
+                        context,
+                        store,
+                        events,
+                    )
+                    task_candidates.append(candidate)
+                    all_candidates.append(candidate)
+                    if candidate.generation_status == GenerationStatus.FAILED:
+                        failed_candidates.append(candidate)
+                    if transform is not None:
+                        task_transforms[candidate.candidate_id] = transform
+                decision = selector(
+                    task,
+                    config.run_id,
+                    task_candidates,
+                    task_transforms,
+                )
+                store.write_json(
+                    f"decisions/{task.task_id}.json",
+                    decision,
+                    overwrite=store.path(f"decisions/{task.task_id}.json").exists(),
+                )
+                visualization_path = f"visualizations/{task.task_id}.png"
+                if not store.path(visualization_path).exists():
+                    grid = comparison_grid(image, task, task_candidates, decision, run_dir)
+                    store.write_image(visualization_path, grid)
+        except Exception:
+            failed = manifest.model_copy(
+                update={
+                    "completed_at": datetime.now(UTC),
+                    "status": "FAILED",
+                    "candidate_ids": tuple(
+                        candidate.candidate_id for candidate in all_candidates
+                    ),
+                    "failed_candidate_ids": tuple(
+                        candidate.candidate_id for candidate in failed_candidates
+                    ),
+                }
             )
-            store.write_json(
-                f"decisions/{task.task_id}.json",
-                decision,
-                overwrite=store.path(f"decisions/{task.task_id}.json").exists(),
-            )
-            visualization_path = f"visualizations/{task.task_id}.png"
-            if not store.path(visualization_path).exists():
-                grid = comparison_grid(image, task, task_candidates, decision, run_dir)
-                store.write_image(visualization_path, grid)
+            store.write_json("run.json", failed, overwrite=True)
+            events.append_run(failed)
+            raise
 
         status = "PARTIAL_COMPLETED" if failed_candidates else "COMPLETED"
         completed = manifest.model_copy(

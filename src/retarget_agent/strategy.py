@@ -66,6 +66,100 @@ class TransformPenalties(FrozenModel):
     mesh_foldover: float = Field(default=8.0, ge=0.0)
 
 
+HumanMetricName = Literal[
+    "quality_score",
+    "content_fidelity_score",
+    "visual_integrity_score",
+    "composition_score",
+    "ocr_character_recall",
+    "ocr_sequence_similarity",
+    "face_count_preservation",
+    "person_count_preservation",
+    "product_count_preservation",
+    "logo_count_preservation",
+    "object_label_f1",
+    "structure_line_similarity",
+    "transform_safety_score",
+    "orb_content_similarity",
+    "color_histogram_similarity",
+    "direct_warp_d_stretch",
+]
+
+
+class HumanMetricCondition(FrozenModel):
+    """One allowlisted numeric condition used by a human-aligned gate."""
+
+    metric: HumanMetricName
+    operator: Literal["lt", "lte", "gt", "gte"]
+    threshold: float
+
+
+class HumanScoreAdjustment(FrozenModel):
+    """Transparent score offset restricted to declared scenes or methods."""
+
+    adjustment_id: str
+    amount: float = Field(ge=-30.0, le=30.0)
+    scenes: tuple[str, ...] = ()
+    methods: tuple[str, ...] = ()
+
+    _adjustment_id = field_validator("adjustment_id")(validate_id)
+
+
+class HumanRegressionPenalty(FrozenModel):
+    """Turn a legacy critical regression into soft, inspectable evidence."""
+
+    regression_code: str
+    amount: float = Field(le=0.0, ge=-30.0)
+
+    _regression_code = field_validator("regression_code")(validate_id)
+
+
+class HumanAlignedGate(FrozenModel):
+    """Declarative AND gate; absent metrics never match."""
+
+    gate_id: str
+    outcome: Literal["C", "D"]
+    scenes: tuple[str, ...] = ()
+    methods: tuple[str, ...] = ()
+    conditions: tuple[HumanMetricCondition, ...] = ()
+
+    _gate_id = field_validator("gate_id")(validate_id)
+
+    @model_validator(mode="after")
+    def constrained_gate(self) -> HumanAlignedGate:
+        if not (self.scenes or self.methods or self.conditions):
+            raise ValueError("a human-aligned gate must declare a scene, method, or condition")
+        return self
+
+
+class HumanAlignedScoringPolicy(FrozenModel):
+    """Optional post-processor for business-usability scoring.
+
+    The data model is intentionally narrower than a general expression language:
+    versions may tune offsets and numeric AND gates, but cannot import code or match
+    task IDs and filenames.
+    """
+
+    enabled: bool = True
+    hard_failure_outcome: Literal["C", "D"] = "D"
+    score_adjustments: tuple[HumanScoreAdjustment, ...] = ()
+    regression_penalties: tuple[HumanRegressionPenalty, ...] = ()
+    gates: tuple[HumanAlignedGate, ...] = ()
+
+    @model_validator(mode="after")
+    def unique_rule_ids(self) -> HumanAlignedScoringPolicy:
+        adjustment_ids = [item.adjustment_id for item in self.score_adjustments]
+        gate_ids = [item.gate_id for item in self.gates]
+        regression_codes = [item.regression_code for item in self.regression_penalties]
+        if len(adjustment_ids) != len(set(adjustment_ids)):
+            raise ValueError("human-aligned score adjustment IDs must be unique")
+        if len(gate_ids) != len(set(gate_ids)):
+            raise ValueError("human-aligned gate IDs must be unique")
+        if len(regression_codes) != len(set(regression_codes)):
+            raise ValueError("human-aligned regression penalty codes must be unique")
+        return self
+
+
 class ScoringPolicy(FrozenModel):
     schema_version: str = "1.0"
     policy_id: str
@@ -91,6 +185,7 @@ class ScoringPolicy(FrozenModel):
     integrity_weights: IntegrityWeights
     composition_weights: CompositionWeights
     transform_penalties: TransformPenalties = Field(default_factory=TransformPenalties)
+    human_alignment: HumanAlignedScoringPolicy | None = None
 
     _policy_id = field_validator("policy_id")(validate_id)
     _implementation = field_validator("implementation")(validate_id)
@@ -157,6 +252,11 @@ class OverridePolicy(FrozenModel):
     require_clear_visual_evidence: bool = True
     require_consistent_pair_evidence: bool = True
     require_agent_grade_improvement: bool = True
+    max_agent_challengers: int = Field(default=1, ge=1, le=2)
+    allow_agent_upgrade: bool = True
+    allow_agent_downgrade: bool = True
+    agent_selection_mode: Literal["challenge", "advisory_only"] = "challenge"
+    combined_grade_source: Literal["strict_review", "rule_metric"] = "strict_review"
     request_aigc_grades: tuple[Literal["A", "B", "C", "D"], ...] = ("C", "D")
     soft_review_target_seconds: float = Field(default=120.0, gt=0.0)
 

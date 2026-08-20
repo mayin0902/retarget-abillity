@@ -6,7 +6,7 @@
 
 ## 2. StrategyBundle 包含什么
 
-`strategies/movie60/v2_1/bundle.yaml` 同时固定：
+当前活动的 `strategies/movie60/v3_2_2/bundle.yaml` 同时固定：
 
 - Rule scoring、selection、override policy；
 - Detector、参考/无参考 Scorer、两个 Selector；

@@ -5,6 +5,7 @@ import csv
 import hashlib
 import io
 import json
+import shutil
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,7 @@ METHODS = {
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_RELEASE_ASSET_BYTES = 2 * 1024**3
 PACKAGE_ROOT = Path("movie60-review")
+ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 
 
 @dataclass(frozen=True)
@@ -65,7 +67,11 @@ def _task_sources(task_dir: Path) -> list[Path]:
     )
 
 
-def _collect(workspace: Path, repository: Path) -> tuple[list[Entry], list[Entry]]:
+def _collect(
+    workspace: Path,
+    repository: Path,
+    agent_evidence: tuple[Path, ...] = (),
+) -> tuple[list[Entry], list[Entry]]:
     all60 = workspace / "all60"
     focus20 = workspace / "focus20"
     tasks_root = all60 / "tasks"
@@ -79,6 +85,10 @@ def _collect(workspace: Path, repository: Path) -> tuple[list[Entry], list[Entry
     for name in ("README.md", "V2_PLAN.md", "start-review.bat"):
         _add_file(core, workspace / name, Path(name), "workspace")
     _add_tree(core, workspace / "rules-v1", Path("rules-v1"), "rules")
+    _add_tree(core, repository / "strategies", Path("strategies"), "strategy-bundles")
+    v3_reviews = repository / "docs" / "reviews" / "movie60-v3"
+    if v3_reviews.is_dir():
+        _add_tree(core, v3_reviews, Path("documentation/movie60-v3"), "strategy-evidence")
 
     for name in (
         "README.md",
@@ -111,6 +121,9 @@ def _collect(workspace: Path, repository: Path) -> tuple[list[Entry], list[Entry
         repository / "docs" / "PLUGIN_STRATEGY_GUIDE.md": Path(
             "documentation/PLUGIN_STRATEGY_GUIDE.md"
         ),
+        repository / "docs" / "MOVIE60_V3_RULE_AGENT_GUIDE.md": Path(
+            "documentation/MOVIE60_V3_RULE_AGENT_GUIDE.md"
+        ),
         repository / "docs" / "reports" / "MOVIE60_STRICT_END_TO_END_REPORT.md": Path(
             "documentation/MOVIE60_TECHNICAL_REPORT.md"
         ),
@@ -125,6 +138,8 @@ def _collect(workspace: Path, repository: Path) -> tuple[list[Entry], list[Entry
         _add_file(core, source, relative, "documentation")
 
     local_dataset = repository / "local_data" / "datasets" / "movie_visual_60_v1"
+    if not local_dataset.is_dir():
+        local_dataset = workspace / "dataset"
     for name in (
         "dataset.yaml",
         "materialization_summary.json",
@@ -185,6 +200,18 @@ def _collect(workspace: Path, repository: Path) -> tuple[list[Entry], list[Entry
     _add_tree(evidence, workspace / "showcase", Path("showcase"), "showcase")
     _add_tree(evidence, focus20 / "tasks", Path("focus20/tasks"), "focus20")
 
+    for evidence_root in agent_evidence:
+        evidence_root = evidence_root.resolve()
+        if not evidence_root.is_dir():
+            raise FileNotFoundError(evidence_root)
+        relative_root = Path("v3-agent-evidence") / evidence_root.name
+        for source in sorted(path for path in evidence_root.rglob("*") if path.is_file()):
+            relative = relative_root / source.relative_to(evidence_root)
+            if source.suffix.lower() in IMAGE_SUFFIXES:
+                _add_file(evidence, source, relative, "v3-agent-visual")
+            else:
+                _add_file(core, source, relative, "v3-agent-record")
+
     core_paths = {entry.archive_path.as_posix() for entry in core}
     evidence_paths = {entry.archive_path.as_posix() for entry in evidence}
     if len(core_paths) != len(core):
@@ -209,9 +236,9 @@ def _review_progress(workspace: Path) -> dict[str, dict[str, int]]:
     return result
 
 
-def _generated_files(workspace: Path) -> dict[Path, bytes]:
+def _generated_files(workspace: Path, release_version: str) -> dict[Path, bytes]:
     progress = _review_progress(workspace)
-    readme = f"""# Movie60 内部交接数据包 v1
+    readme = f"""# Movie60 内部交接数据包 {release_version}
 
 本包用于私有仓库协作。它包含60份原图、420份七方法候选、机器排名与原因、高清中间证据、
 AIGC成功/失败记录以及人工评审表。商业素材仅限内部评测，不得公开再分发。
@@ -295,30 +322,56 @@ def _write_zip(
                 if entry.source.suffix.lower() in IMAGE_SUFFIXES
                 else zipfile.ZIP_DEFLATED
             )
-            archive.write(entry.source, entry.archive_path.as_posix(), compress_type=compress)
+            info = _zip_info(entry.archive_path, compress)
+            with entry.source.open("rb") as source, archive.open(
+                info,
+                "w",
+                force_zip64=True,
+            ) as destination:
+                shutil.copyfileobj(source, destination, length=1024 * 1024)
         for archive_path, payload in generated.items():
-            archive.writestr(archive_path.as_posix(), payload, compress_type=zipfile.ZIP_DEFLATED)
+            archive.writestr(_zip_info(archive_path, zipfile.ZIP_DEFLATED), payload)
         archive.writestr(
-            (PACKAGE_ROOT / manifest_name).as_posix(),
+            _zip_info(PACKAGE_ROOT / manifest_name, zipfile.ZIP_DEFLATED),
             _manifest(entries),
-            compress_type=zipfile.ZIP_DEFLATED,
         )
     if path.stat().st_size >= MAX_RELEASE_ASSET_BYTES:
         raise ValueError(f"release asset exceeds GitHub 2 GiB limit: {path}")
 
 
-def package(repository: Path, output_dir: Path) -> list[Path]:
+def _zip_info(path: Path, compress_type: int) -> zipfile.ZipInfo:
+    info = zipfile.ZipInfo(path.as_posix(), date_time=ZIP_TIMESTAMP)
+    info.compress_type = compress_type
+    info.create_system = 3
+    info.external_attr = 0o100644 << 16
+    return info
+
+
+def package(
+    repository: Path,
+    output_dir: Path,
+    *,
+    release_version: str = "v1",
+    workspace: Path | None = None,
+    agent_evidence: tuple[Path, ...] = (),
+) -> list[Path]:
     repository = repository.resolve()
-    workspace = repository / "deliverables" / "movie60-review"
+    workspace = (
+        workspace.resolve()
+        if workspace is not None
+        else repository / "deliverables" / "movie60-review"
+    )
     output_dir = output_dir.resolve()
     if output_dir.exists() and any(output_dir.iterdir()):
         raise FileExistsError(f"output directory is not empty: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    core, evidence = _collect(workspace, repository)
-    generated = _generated_files(workspace)
-    core_zip = output_dir / "movie60-handoff-v1-core.zip"
-    evidence_zip = output_dir / "movie60-handoff-v1-evidence.zip"
+    core, evidence = _collect(workspace, repository, agent_evidence)
+    if not release_version.startswith("v") or not release_version[1:].isdigit():
+        raise ValueError("release_version must look like v1 or v2")
+    generated = _generated_files(workspace, release_version)
+    core_zip = output_dir / f"movie60-handoff-{release_version}-core.zip"
+    evidence_zip = output_dir / f"movie60-handoff-{release_version}-evidence.zip"
     _write_zip(core_zip, core, generated, "core-manifest.csv")
     _write_zip(evidence_zip, evidence, {}, "evidence-manifest.csv")
 
@@ -336,12 +389,34 @@ def main() -> int:
     )
     parser.add_argument("--repository", type=Path, default=Path.cwd())
     parser.add_argument(
+        "--workspace",
+        type=Path,
+        help=(
+            "Materialized movie60-review root; defaults to "
+            "repository/deliverables/movie60-review."
+        ),
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("local_data/release_assets/movie60-handoff-v1"),
     )
+    parser.add_argument("--release-version", default="v1")
+    parser.add_argument(
+        "--agent-evidence",
+        type=Path,
+        action="append",
+        default=[],
+        help="Completed Agent/strict-review directory to include; may be repeated.",
+    )
     args = parser.parse_args()
-    assets = package(args.repository, args.output_dir)
+    assets = package(
+        args.repository,
+        args.output_dir,
+        release_version=args.release_version,
+        workspace=args.workspace,
+        agent_evidence=tuple(args.agent_evidence),
+    )
     for path in assets:
         print(f"{path.name}\t{path.stat().st_size}\t{_sha256(path)}")
     return 0

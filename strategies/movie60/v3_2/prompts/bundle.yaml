@@ -1,0 +1,29 @@
+schema_version: "1.0"
+bundle_id: movie60-prompts
+version: "3.2.0"
+overview:
+  template_id: movie60-overview
+  version: "3.2.0"
+  body_file: overview.txt
+  required_variables:
+    [skill_instruction, task_id, rule_top1_alias, rule_ranking_json, candidate_payload_json]
+strict_candidate:
+  template_id: movie60-strict-candidate
+  version: "3.2.0"
+  body_file: strict-candidate.txt
+  required_variables: [task_id, candidate_id, evidence_json, candidate_kind]
+rule_agent_pair:
+  template_id: movie60-rule-agent-pair
+  version: "3.2.0"
+  body_file: rule-agent-pair.txt
+  required_variables: [task_id, evidence_json]
+standalone_image:
+  template_id: single-image-visual-review
+  version: "3.2.0"
+  body_file: standalone-image.txt
+  required_variables: [mode, evidence_json]
+aigc_generation:
+  template_id: movie60-faithful-square
+  version: "3.2.0"
+  body_file: seedream-generation.txt
+  required_variables: []

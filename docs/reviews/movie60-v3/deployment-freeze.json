@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "frozen_at": "2026-08-21T05:16:00+08:00",
+  "deployment_strategy": "movie60@3.2.2",
+  "strategy_sha256": "49a74b7132b0efe8cf4b014644db7a56d77b8820df1d21b4388d0a33e81ecd73",
+  "parent_strategy": "movie60@3.2.1",
+  "deployment_route": "rule_primary_agent_advisory",
+  "selection_mode": "advisory_only",
+  "grade_source": "rule_metric",
+  "proxy_split_sha256": "53b14567e9f34682ca43a5aa8236b23c5b8a96dc0f41b097651c791fa05983c6",
+  "pre_holdout_freeze": "winner-freeze-v2.json",
+  "pre_holdout_freeze_sha256": "edb44bf4fdf80895f33d721c15ac28e14239cb5d0b429903b6d83137175df06b",
+  "development_report": "agent-v3-2-2-development/report.json",
+  "development_report_sha256": "154a415f0c5a4de36d8f2eeac240ed9dcd704b9c0b72d150991333e2c8da7933",
+  "proxy_holdout_report": "agent-v3-2-2-proxy-holdout/report.json",
+  "proxy_holdout_report_sha256": "e2311681e59086a48335b5aff39c58b29856670d0d15d076f4d25f9f5dbb0852",
+  "selection_basis": {
+    "predeclared_routes": ["rule_only", "agent_only", "combined"],
+    "rule_selected_candidate_proxy_ab_rate": 1.0,
+    "agent_selected_candidate_proxy_ab_rate": 0.8,
+    "experimental_combined_selected_candidate_proxy_ab_rate": 0.8666666666666667,
+    "rule_proxy_best_method_hit_rate": 0.8666666666666667,
+    "agent_proxy_best_method_hit_rate": 0.6,
+    "experimental_combined_proxy_best_method_hit_rate": 0.6666666666666666
+  },
+  "decision": "The proxy holdout contradicted the development-set selection gain. The Rule-only route retained 15/15 proxy-usable candidates, while Agent-only retained 12/15 and experimental Combined retained 13/15. Deployment therefore keeps Rule Top1 and Rule grade; Agent evidence is advisory and remains visible for human review and future skill iteration.",
+  "label_status": "human_screened_large_model_proxy_not_human_ground_truth",
+  "independent_human_validation": false,
+  "holdout_used_for_route_selection": true,
+  "thresholds_tuned_after_holdout": false,
+  "remaining_independent_validation": false
+}

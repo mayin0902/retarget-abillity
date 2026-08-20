@@ -38,7 +38,7 @@ def main() -> None:
     parser.add_argument(
         "--strategy",
         type=Path,
-        default=Path("strategies/movie60/v2/bundle.yaml"),
+        default=Path("strategies/movie60/v3_2_2/bundle.yaml"),
     )
     args = parser.parse_args()
     strategy = load_strategy_bundle(args.strategy)

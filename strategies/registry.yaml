@@ -6,7 +6,37 @@ strategies:
     sha256: 9d7c38c23b4cf39337de0d48999547aa8d5bee5025ced907118dc3a2a4967359
     predecessor: null
   - strategy: movie60@2.0.0
-    status: active
+    status: frozen
     bundle: movie60/v2/bundle.yaml
     sha256: 724bb98e713286b8efc17b9db05f9137f2dbb5c1bacd9f960c5075e46995d54a
     predecessor: movie60@1.0.0
+  - strategy: movie60@2.1.0
+    status: frozen
+    bundle: movie60/v2_1/bundle.yaml
+    sha256: c343aa1bab4ebce3cf313d655e822eeee9a7d803f1c7ae4c6100455a4ecbe97d
+    predecessor: movie60@2.0.0
+  - strategy: movie60@3.0.0
+    status: frozen
+    bundle: movie60/v3/bundle.yaml
+    sha256: 57a74774475e5cf27680d1887f254b9fb3ad54cb564f192c0bee2c16a35586dc
+    predecessor: movie60@2.1.0
+  - strategy: movie60@3.1.0
+    status: frozen
+    bundle: movie60/v3_1/bundle.yaml
+    sha256: c90c113d53ab55b61c5b4e8898d4372da3acf2b9a5c3ce440aacdc993fd201e4
+    predecessor: movie60@3.0.0
+  - strategy: movie60@3.2.0
+    status: frozen
+    bundle: movie60/v3_2/bundle.yaml
+    sha256: da4d379db38cf8c028cb4f0d4bed2663480e96d89da9a73a20fce563b5ff27d7
+    predecessor: movie60@3.1.0
+  - strategy: movie60@3.2.1
+    status: frozen
+    bundle: movie60/v3_2_1/bundle.yaml
+    sha256: 1c9410eae344243a863de74eb201d5d32fec1a5578ef43a5dddcd2f05ed375d0
+    predecessor: movie60@3.2.0
+  - strategy: movie60@3.2.2
+    status: active
+    bundle: movie60/v3_2_2/bundle.yaml
+    sha256: 49a74b7132b0efe8cf4b014644db7a56d77b8820df1d21b4388d0a33e81ecd73
+    predecessor: movie60@3.2.1

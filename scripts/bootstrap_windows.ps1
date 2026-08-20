@@ -12,6 +12,18 @@ Set-StrictMode -Version Latest
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $RepoRoot
 
+function Invoke-Checked {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    & $Executable @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Label failed with exit code $LASTEXITCODE. See the command output above."
+    }
+}
+
 if (Test-Path -LiteralPath '.venv') {
     throw '.venv already exists. Refusing to overwrite an environment.'
 }
@@ -21,7 +33,7 @@ $Required = @(
     'requirements\constraints-py311-313.txt',
     'strategies\movie60\v1\bundle.yaml',
     'strategies\movie60\v2\bundle.yaml',
-    'strategies\movie60\v2_1\bundle.yaml',
+    'strategies\movie60\v3_2_2\bundle.yaml',
     'datasets\analyzer_models_v1\model_manifest.csv'
 )
 $Missing = $Required | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) }
@@ -33,7 +45,7 @@ if ($PythonExecutable) {
     if (-not (Test-Path -LiteralPath $PythonExecutable -PathType Leaf)) {
         throw "Python executable does not exist: $PythonExecutable"
     }
-    & $PythonExecutable -m venv .venv
+    Invoke-Checked $PythonExecutable @('-m', 'venv', '.venv') 'Virtual environment creation'
 } else {
     if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
         Write-Host 'Python launcher was not found.' -ForegroundColor Red
@@ -47,24 +59,23 @@ if ($PythonExecutable) {
         Write-Host "Suggested command (run manually): winget install Python.Python.$PythonVersion"
         exit 2
     }
-    & py "-$PythonVersion" -m venv .venv
+    Invoke-Checked 'py' @("-$PythonVersion", '-m', 'venv', '.venv') 'Virtual environment creation'
 }
 $Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
 $Cli = Join-Path $RepoRoot '.venv\Scripts\retarget-engine.exe'
-$Pip = @($Python, '-m', 'pip')
 
-& $Python -m pip install --upgrade 'pip==25.2' 'setuptools==80.9.0' 'wheel==0.45.1'
-& $Python -m pip install -c requirements\constraints-py311-313.txt -e '.[dev]'
-& $Python -m pip install -r requirements\company-models-windows.txt
-& $Python scripts\materialize_analyzer_models.py
-& $Python scripts\materialize_company_models.py
-& $Cli strategy show strategies\movie60\v1\bundle.yaml
-& $Cli strategy show strategies\movie60\v2\bundle.yaml
-& $Cli strategy show strategies\movie60\v2_1\bundle.yaml
-& $Python -m pytest -q tests\test_strategy.py tests\test_single_image_workflow_tools.py
+Invoke-Checked $Python @('-m', 'pip', 'install', '--upgrade', 'pip==25.2', 'setuptools==80.9.0', 'wheel==0.45.1') 'Build-tool installation'
+Invoke-Checked $Python @('-m', 'pip', 'install', '-c', 'requirements\constraints-py311-313.txt', '-e', '.[dev]') 'Project installation'
+Invoke-Checked $Python @('-m', 'pip', 'install', '-r', 'requirements\company-models-windows.txt') 'Company-model runtime installation'
+Invoke-Checked $Python @('scripts\materialize_analyzer_models.py') 'Analyzer model materialization'
+Invoke-Checked $Python @('scripts\materialize_company_models.py') 'Company model materialization'
+Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v1\bundle.yaml') 'v1 strategy validation'
+Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v2\bundle.yaml') 'v2 strategy validation'
+Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v3_2_2\bundle.yaml') 'v3.2.2 strategy validation'
+Invoke-Checked $Python @('-m', 'pytest', '-q', 'tests\test_strategy.py', 'tests\test_single_image_workflow_tools.py') 'Bootstrap smoke tests'
 
 if ($WithMovie60Release) {
-    & $Python scripts\materialize_movie60_release.py
+    Invoke-Checked $Python @('scripts\materialize_movie60_release.py') 'Movie60 Release materialization'
 }
 
 Write-Host ''

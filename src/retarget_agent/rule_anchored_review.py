@@ -74,13 +74,17 @@ class RuleAgentPairInvocation(FrozenModel):
 
 
 class RuleAnchoredTaskDecision(FrozenModel):
-    schema_version: str = "1.0"
+    schema_version: str = "1.2"
     task_id: str
     phase: str
     rule_complete_ranking: tuple[str, ...]
     rule_top1_candidate_id: str
     agent_proposed_candidate_id: str
+    agent_challenger_candidate_ids: tuple[str, ...] = ()
     reviewed_candidate_ids: tuple[str, ...]
+    pair_reviewed_candidate_ids: tuple[str, ...] = ()
+    rule_numeric_score: float | None = Field(default=None, ge=0.0, le=100.0)
+    rule_numeric_grade: str | None = None
     rule_grade: MachineGrade
     agent_grade: MachineGrade
     pair_preference: PairPreference
@@ -89,6 +93,8 @@ class RuleAnchoredTaskDecision(FrozenModel):
     agent_core_content_preserved: bool | None
     selected_candidate_id: str
     selected_grade: MachineGrade
+    combined_grade: MachineGrade
+    combined_grade_source: str = "strict_review"
     selected_directly_usable: bool
     agent_overrode_rule: bool
     override_block_reasons: tuple[str, ...]
@@ -117,6 +123,49 @@ class RuleAnchoredReviewAdapter(Protocol):
         sheet_path: Path,
         evidence: dict[str, Any],
     ) -> RuleAgentPairInvocation: ...
+
+
+def derive_agent_challenger_ids(
+    overview: RouteDecision,
+    *,
+    max_challengers: int,
+    candidate_sha256_by_id: dict[str, str] | None = None,
+) -> tuple[str, ...]:
+    """Choose up to two non-Rule challengers from the Agent's complete ranking.
+
+    The explicitly proposed challenger remains first for backwards compatibility.
+    The Agent-selected Top1 and then its full ranking supply additional challengers.
+    Rule Top1 is always excluded because it is reviewed independently.
+    """
+
+    if not 1 <= max_challengers <= 2:
+        raise ValueError("max_challengers must be one or two")
+    rule_id = overview.deterministic_candidate_id
+    seen_hashes = (
+        {candidate_sha256_by_id[rule_id]}
+        if candidate_sha256_by_id is not None and rule_id in candidate_sha256_by_id
+        else set()
+    )
+    ordered = (
+        overview.agent_challenger_candidate_id,
+        overview.selected_candidate_id,
+        *overview.candidate_ranking,
+    )
+    challengers: list[str] = []
+    for candidate_id in ordered:
+        if candidate_id is None or candidate_id == rule_id or candidate_id in challengers:
+            continue
+        if candidate_sha256_by_id is not None:
+            candidate_hash = candidate_sha256_by_id.get(candidate_id)
+            if candidate_hash is None:
+                raise ValueError(f"missing output hash for candidate {candidate_id}")
+            if candidate_hash in seen_hashes:
+                continue
+            seen_hashes.add(candidate_hash)
+        challengers.append(candidate_id)
+        if len(challengers) == max_challengers:
+            break
+    return tuple(challengers)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -526,6 +575,8 @@ def decide_rule_anchored_candidate(
     agent_metrics: dict[str, Any],
     wall_seconds: float,
     override_policy: OverridePolicy | None = None,
+    considered_challenger_ids: tuple[str, ...] = (),
+    pair_reviewed_candidate_ids: tuple[str, ...] = (),
 ) -> RuleAnchoredTaskDecision:
     rule_id = rule_ranking[0]
     same_candidate = rule_id == agent_candidate_id
@@ -559,12 +610,40 @@ def decide_rule_anchored_candidate(
         agent_review.overall_grade
     ] >= _GRADE_RANK[rule_review.overall_grade]:
         blocks.append("agent_grade_not_better_than_rule")
+    if override_policy is not None:
+        if (
+            _GRADE_RANK[agent_review.overall_grade]
+            < _GRADE_RANK[rule_review.overall_grade]
+            and not override_policy.allow_agent_upgrade
+        ):
+            blocks.append("agent_upgrade_disabled")
+        if (
+            _GRADE_RANK[agent_review.overall_grade]
+            > _GRADE_RANK[rule_review.overall_grade]
+            and not override_policy.allow_agent_downgrade
+        ):
+            blocks.append("agent_downgrade_disabled")
     if same_candidate:
         blocks.append("same_candidate_as_rule")
+    if override_policy is not None and override_policy.agent_selection_mode == "advisory_only":
+        blocks.append("agent_advisory_only")
     blocks = list(dict.fromkeys(blocks))
     override = not blocks
     selected_id = agent_candidate_id if override else rule_id
     selected_review = agent_review if override else rule_review
+    selected_metrics = agent_metrics if override else rule_metrics
+    combined_grade_source = (
+        override_policy.combined_grade_source if override_policy is not None else "strict_review"
+    )
+    combined_grade = selected_review.overall_grade
+    if combined_grade_source == "rule_metric":
+        raw_grade = selected_metrics.get("proxy_grade")
+        if raw_grade is not None:
+            normalized_grade = str(raw_grade).removeprefix("proxy_").upper()
+            try:
+                combined_grade = MachineGrade(normalized_grade)
+            except ValueError:
+                combined_grade_source = "strict_review_fallback_invalid_rule_metric"
     decision_codes = (
         ("clear_visual_override",)
         if override
@@ -576,7 +655,23 @@ def decide_rule_anchored_candidate(
         rule_complete_ranking=rule_ranking,
         rule_top1_candidate_id=rule_id,
         agent_proposed_candidate_id=agent_candidate_id,
-        reviewed_candidate_ids=tuple(dict.fromkeys((rule_id, agent_candidate_id))),
+        agent_challenger_candidate_ids=considered_challenger_ids
+        or (agent_candidate_id,),
+        reviewed_candidate_ids=tuple(
+            dict.fromkeys((rule_id, *(considered_challenger_ids or (agent_candidate_id,))))
+        ),
+        pair_reviewed_candidate_ids=pair_reviewed_candidate_ids
+        or ((agent_candidate_id,) if agent_candidate_id != rule_id else ()),
+        rule_numeric_score=(
+            float(rule_metrics["quality_score"])
+            if rule_metrics.get("quality_score") is not None
+            else None
+        ),
+        rule_numeric_grade=(
+            str(rule_metrics["proxy_grade"]).removeprefix("proxy_").upper()
+            if rule_metrics.get("proxy_grade") is not None
+            else None
+        ),
         rule_grade=rule_review.overall_grade,
         agent_grade=agent_review.overall_grade,
         pair_preference=pair_review.preferred,
@@ -585,11 +680,13 @@ def decide_rule_anchored_candidate(
         agent_core_content_preserved=agent_core_content_preserved,
         selected_candidate_id=selected_id,
         selected_grade=selected_review.overall_grade,
-        selected_directly_usable=selected_review.directly_usable,
+        combined_grade=combined_grade,
+        combined_grade_source=combined_grade_source,
+        selected_directly_usable=combined_grade in {MachineGrade.A, MachineGrade.B},
         agent_overrode_rule=override,
         override_block_reasons=tuple(blocks),
         decision_reason_codes=decision_codes,
-        request_external_aigc=selected_review.overall_grade.value
+        request_external_aigc=combined_grade.value
         in (
             set(override_policy.request_aigc_grades)
             if override_policy is not None
@@ -644,10 +741,11 @@ def run_rule_anchored_review(
     calibration_review_run_id: str | None = None,
     strategy_bundle: LoadedStrategyBundle | None = None,
 ) -> dict[str, Any]:
-    """Review Rule Top1 and one Agent challenger behind a strict override interface."""
+    """Review Rule Top1 and up to two Agent challengers behind strict gates."""
 
-    if phase not in {"calibration", "validation"}:
-        raise ValueError("phase must be calibration or validation")
+    allowed_phases = {"calibration", "validation", "development", "proxy_holdout"}
+    if phase not in allowed_phases:
+        raise ValueError(f"phase must be one of {sorted(allowed_phases)}")
     run_dir = run_dir.resolve()
     store = LocalArtifactStore(run_dir)
     run = RunManifest.model_validate(store.read_json("run.json"))
@@ -663,16 +761,17 @@ def run_rule_anchored_review(
         and agent_manifest.strategy_sha256 != strategy_bundle.source_sha256
     ):
         raise ValueError("Agent run strategy hash does not match review strategy")
-    if phase == "validation":
+    if phase in {"validation", "proxy_holdout"}:
         if not calibration_review_run_id:
-            raise ValueError("validation requires a frozen calibration review run")
+            raise ValueError(f"{phase} requires a frozen development review run")
         calibration_summary = _read_json(
             run_dir / "strict-reviews" / calibration_review_run_id / "summary.json"
         )
-        if not calibration_summary.get("complete") or not calibration_summary.get(
-            "policy_frozen_after_calibration"
+        if not calibration_summary.get("complete") or not (
+            calibration_summary.get("policy_frozen_after_calibration")
+            or calibration_summary.get("strategy_frozen_for_holdout")
         ):
-            raise ValueError("calibration review is not complete and frozen")
+            raise ValueError("development review is not complete and frozen")
         if calibration_summary.get("policy_sha256") != policy_sha256:
             raise ValueError("validation policy differs from frozen calibration policy")
         if (
@@ -693,7 +792,7 @@ def run_rule_anchored_review(
         for task_id in task_ids:
             started = time.perf_counter()
             task = TaskSpec.model_validate(store.read_json(f"tasks/{task_id}.json"))
-            if task.source.split != phase:
+            if phase in {"calibration", "validation"} and task.source.split != phase:
                 raise ValueError(f"{task_id}: split {task.source.split} does not match {phase}")
             overview = RouteDecision.model_validate(
                 store.read_json(f"agent-runs/{overview_agent_run_id}/decisions/{task_id}.json")
@@ -704,12 +803,17 @@ def run_rule_anchored_review(
             if overview.selected_candidate_id is None:
                 raise ValueError(f"{task_id}: Agent did not propose a candidate")
             rule_id = rule_ranking[0]
-            agent_id = overview.agent_challenger_candidate_id or overview.selected_candidate_id
-            challenger_core_preserved = (
-                overview.agent_challenger_core_content_preserved
-                if overview.agent_challenger_candidate_id is not None
-                else overview.agent_core_content_preserved
-            )
+            override_policy = strategy_bundle.override if strategy_bundle else None
+            core_preserved_by_id: dict[str, bool | None] = {}
+            if overview.agent_challenger_candidate_id is not None:
+                core_preserved_by_id[overview.agent_challenger_candidate_id] = (
+                    overview.agent_challenger_core_content_preserved
+                )
+            if overview.selected_candidate_id is not None:
+                core_preserved_by_id.setdefault(
+                    overview.selected_candidate_id,
+                    overview.agent_core_content_preserved,
+                )
             analysis = AnalysisArtifact.model_validate(
                 store.read_json(f"analysis/{task_id}/analysis.json")
             )
@@ -720,11 +824,29 @@ def run_rule_anchored_review(
                 for path in (run_dir / "candidates" / task_id).glob("*/candidate.json")
             ]
             by_id = {item.candidate_id: item for item in records}
+            candidate_sha256_by_id = {
+                candidate_id: candidate.output.sha256
+                for candidate_id, candidate in by_id.items()
+                if candidate.output is not None
+            }
+            challenger_ids = derive_agent_challenger_ids(
+                overview,
+                max_challengers=(override_policy.max_agent_challengers if override_policy else 1),
+                candidate_sha256_by_id=candidate_sha256_by_id,
+            )
+            if not challenger_ids:
+                challenger_ids = (rule_id,)
             review_by_id: dict[str, StrictReviewInvocation] = {}
             metric_by_id: dict[str, dict[str, Any]] = {}
-            for role, candidate_id in (("rule_top1", rule_id), ("agent_top1", agent_id)):
+            review_roles = (("rule_top1", rule_id),) + tuple(
+                (f"agent_challenger_{index}", candidate_id)
+                for index, candidate_id in enumerate(challenger_ids, start=1)
+            )
+            for role, candidate_id in review_roles:
                 if candidate_id in review_by_id:
                     continue
+                if candidate_id not in by_id:
+                    raise ValueError(f"{task_id}: unknown candidate {candidate_id}")
                 candidate = by_id[candidate_id]
                 if candidate.output is None:
                     raise ValueError(f"{candidate_id}: missing output")
@@ -763,89 +885,139 @@ def run_rule_anchored_review(
                 metric_by_id[rule_id] = store.read_json(
                     f"evaluations/{evaluation_id}/metrics/{rule_id}.json"
                 )["metrics"]
-            if agent_id not in metric_by_id:
-                metric_by_id[agent_id] = store.read_json(
-                    f"evaluations/{evaluation_id}/metrics/{agent_id}.json"
-                )["metrics"]
+            for challenger_id in challenger_ids:
+                if challenger_id not in metric_by_id:
+                    metric_by_id[challenger_id] = store.read_json(
+                        f"evaluations/{evaluation_id}/metrics/{challenger_id}.json"
+                    )["metrics"]
             rule_review = review_by_id[rule_id].review
-            agent_review = review_by_id[agent_id].review
-            if rule_id == agent_id:
-                pair_invocation = RuleAgentPairInvocation(
-                    review=RuleAgentPairReview(
-                        preferred=PairPreference.TIE,
-                        clear_visual_evidence=False,
-                        evidence_consistent=True,
-                        confidence=1.0,
-                        reason_codes=("same_candidate",),
-                        summary="Rule Top1 与 Agent 建议的是同一候选，无需重复配对。",
-                    ),
-                    latency_seconds=0.0,
-                )
-                pair_meta = None
-            else:
-                crop_limit = (
-                    8
-                    if (
-                        task.source.scene_category in {"movie_poster", "video_cover"}
-                        or sum(_semantic_type(item) == "person" for item in analysis.regions) >= 2
-                        or any(
-                            _semantic_type(item) in {"product", "logo_candidate"}
-                            for item in analysis.regions
-                        )
+            trial_decisions: list[RuleAnchoredTaskDecision] = []
+            pair_payloads: dict[str, dict[str, Any]] = {}
+            pair_reviewed_ids: list[str] = []
+            crop_limit = (
+                8
+                if (
+                    task.source.scene_category in {"movie_poster", "video_cover"}
+                    or sum(_semantic_type(item) == "person" for item in analysis.regions) >= 2
+                    or any(
+                        _semantic_type(item) in {"product", "logo_candidate"}
+                        for item in analysis.regions
                     )
-                    else 6
                 )
-                rule_record = by_id[rule_id]
-                agent_record = by_id[agent_id]
-                if rule_record.output is None or agent_record.output is None:
-                    raise ValueError(f"{task_id}: missing candidate output")
-                pair_sheet = output / "pair-sheets" / f"{task_id}.png"
-                pair_meta = build_rule_agent_pair_sheet(
-                    source_path,
-                    store.path(rule_record.output.relative_path),
-                    store.path(agent_record.output.relative_path),
-                    analysis,
-                    pair_sheet,
-                    critical_crop_limit=crop_limit,
-                )
-                pair_evidence = {
-                    "rule_candidate_id": rule_id,
-                    "agent_candidate_id": agent_id,
-                    "rule_metrics": metric_by_id[rule_id],
-                    "agent_metrics": metric_by_id[agent_id],
-                    "rule_individual_review": rule_review.model_dump(mode="json"),
-                    "agent_individual_review": agent_review.model_dump(mode="json"),
-                    "agent_overview_core_content_preserved": (challenger_core_preserved),
-                }
-                pair_invocation = backend.compare_rule_agent(
-                    task_id=task_id,
-                    sheet_path=pair_sheet,
-                    evidence=pair_evidence,
-                )
-                pair_call_count += 1
-            _write_json(
-                output / "pair-reviews" / f"{task_id}.json",
-                {
+                else 6
+            )
+            for challenger_index, agent_id in enumerate(challenger_ids, start=1):
+                agent_review = review_by_id[agent_id].review
+                challenger_core_preserved = core_preserved_by_id.get(agent_id)
+                if rule_id == agent_id:
+                    pair_invocation = RuleAgentPairInvocation(
+                        review=RuleAgentPairReview(
+                            preferred=PairPreference.TIE,
+                            clear_visual_evidence=False,
+                            evidence_consistent=True,
+                            confidence=1.0,
+                            reason_codes=("same_candidate",),
+                            summary="Rule Top1 与 Agent 建议的是同一候选，无需重复配对。",
+                        ),
+                        latency_seconds=0.0,
+                    )
+                    pair_meta = None
+                else:
+                    rule_record = by_id[rule_id]
+                    agent_record = by_id[agent_id]
+                    if rule_record.output is None or agent_record.output is None:
+                        raise ValueError(f"{task_id}: missing candidate output")
+                    pair_sheet = (
+                        output
+                        / "pair-sheets"
+                        / task_id
+                        / f"challenger-{challenger_index}-{agent_record.method_id}.png"
+                    )
+                    pair_meta = build_rule_agent_pair_sheet(
+                        source_path,
+                        store.path(rule_record.output.relative_path),
+                        store.path(agent_record.output.relative_path),
+                        analysis,
+                        pair_sheet,
+                        critical_crop_limit=crop_limit,
+                    )
+                    pair_evidence = {
+                        "rule_candidate_id": rule_id,
+                        "agent_candidate_id": agent_id,
+                        "rule_complete_ranking": list(rule_ranking),
+                        "rule_metrics": metric_by_id[rule_id],
+                        "agent_metrics": metric_by_id[agent_id],
+                        "rule_individual_review": rule_review.model_dump(mode="json"),
+                        "agent_individual_review": agent_review.model_dump(mode="json"),
+                        "agent_overview_core_content_preserved": challenger_core_preserved,
+                    }
+                    pair_invocation = backend.compare_rule_agent(
+                        task_id=task_id,
+                        sheet_path=pair_sheet,
+                        evidence=pair_evidence,
+                    )
+                    pair_call_count += 1
+                    pair_reviewed_ids.append(agent_id)
+                pair_payload = {
                     "task_id": task_id,
                     "rule_candidate_id": rule_id,
                     "agent_candidate_id": agent_id,
                     "sheet": pair_meta,
                     "invocation": pair_invocation.model_dump(mode="json"),
-                },
+                }
+                pair_payloads[agent_id] = pair_payload
+                _write_json(
+                    output
+                    / "pair-reviews"
+                    / task_id
+                    / f"challenger-{challenger_index}.json",
+                    pair_payload,
+                )
+                trial_decisions.append(
+                    decide_rule_anchored_candidate(
+                        task_id=task_id,
+                        phase=phase,
+                        rule_ranking=rule_ranking,
+                        agent_candidate_id=agent_id,
+                        rule_review=rule_review,
+                        agent_review=agent_review,
+                        pair_review=pair_invocation.review,
+                        agent_core_content_preserved=challenger_core_preserved,
+                        rule_metrics=metric_by_id[rule_id],
+                        agent_metrics=metric_by_id[agent_id],
+                        wall_seconds=time.perf_counter() - started,
+                        override_policy=override_policy,
+                        considered_challenger_ids=challenger_ids,
+                        pair_reviewed_candidate_ids=tuple(pair_reviewed_ids),
+                    )
+                )
+            ranking_position = {
+                candidate_id: index for index, candidate_id in enumerate(overview.candidate_ranking)
+            }
+            successful_overrides = [item for item in trial_decisions if item.agent_overrode_rule]
+            if successful_overrides:
+                decision = min(
+                    successful_overrides,
+                    key=lambda item: (
+                        _GRADE_RANK[item.selected_grade],
+                        ranking_position.get(item.selected_candidate_id, 10_000),
+                    ),
+                )
+            else:
+                decision = trial_decisions[0]
+            decision = decision.model_copy(
+                update={
+                    "agent_challenger_candidate_ids": challenger_ids,
+                    "reviewed_candidate_ids": tuple(dict.fromkeys((rule_id, *challenger_ids))),
+                    "pair_reviewed_candidate_ids": tuple(pair_reviewed_ids),
+                    "task_review_wall_seconds": time.perf_counter() - started,
+                    "within_soft_target_120s": (time.perf_counter() - started)
+                    <= (override_policy.soft_review_target_seconds if override_policy else 120),
+                }
             )
-            decision = decide_rule_anchored_candidate(
-                task_id=task_id,
-                phase=phase,
-                rule_ranking=rule_ranking,
-                agent_candidate_id=agent_id,
-                rule_review=rule_review,
-                agent_review=agent_review,
-                pair_review=pair_invocation.review,
-                agent_core_content_preserved=challenger_core_preserved,
-                rule_metrics=metric_by_id[rule_id],
-                agent_metrics=metric_by_id[agent_id],
-                wall_seconds=time.perf_counter() - started,
-                override_policy=(strategy_bundle.override if strategy_bundle else None),
+            _write_json(
+                output / "pair-reviews" / f"{task_id}.json",
+                pair_payloads[decision.agent_proposed_candidate_id],
             )
             decisions.append(decision)
             _write_json(
@@ -857,10 +1029,10 @@ def run_rule_anchored_review(
             "rule-anchored review interrupted; do not use as complete\n", encoding="utf-8"
         )
         raise
-    grade_counts = Counter(item.selected_grade.value for item in decisions)
+    grade_counts = Counter(item.combined_grade.value for item in decisions)
     block_counts = Counter(reason for item in decisions for reason in item.override_block_reasons)
     summary = {
-        "schema_version": "1.0",
+        "schema_version": "1.2",
         "review_run_id": review_run_id,
         "source_run_id": run.run_id,
         "evaluation_id": evaluation_id,
@@ -872,12 +1044,18 @@ def run_rule_anchored_review(
         "strategy_sha256": strategy_bundle.source_sha256 if strategy_bundle else None,
         "strategy_snapshot": "strategy" if strategy_bundle else None,
         "policy_frozen_after_calibration": phase == "calibration",
+        "strategy_frozen_for_holdout": phase in {"calibration", "development"},
         "calibration_review_run_id": calibration_review_run_id,
         "task_count": len(decisions),
         "candidate_review_count": review_count,
         "pair_call_count": pair_call_count,
         "rule_forced_review_count": len(decisions),
-        "agent_proposal_review_count": len(decisions),
+        "agent_proposal_review_count": sum(
+            len(item.agent_challenger_candidate_ids) for item in decisions
+        ),
+        "max_agent_challengers": (
+            strategy_bundle.override.max_agent_challengers if strategy_bundle else 1
+        ),
         "agent_override_count": sum(item.agent_overrode_rule for item in decisions),
         "selected_grade_counts": dict(grade_counts),
         "selected_ab_count": sum(item.selected_directly_usable for item in decisions),
@@ -900,5 +1078,6 @@ __all__ = [
     "RuleAnchoredTaskDecision",
     "build_rule_agent_pair_sheet",
     "decide_rule_anchored_candidate",
+    "derive_agent_challenger_ids",
     "run_rule_anchored_review",
 ]
