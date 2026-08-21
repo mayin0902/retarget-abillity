@@ -103,7 +103,14 @@ def test_one_method_failure_does_not_block_other_methods(tmp_path: Path) -> None
     config_path.write_text(yaml.safe_dump(raw), encoding="utf-8")
     builtins = built_in_methods()
     registry: Registry[object] = Registry("method")
-    for method_id in ("direct_warp", "crop", "mesh_full", "seam_scale"):
+    for method_id in (
+        "direct_warp",
+        "crop",
+        "seam",
+        "mesh",
+        "mesh_full",
+        "seam_scale",
+    ):
         registry.register(method_id, builtins.get(method_id))
     failing = FailingSeam()
     failing.method_id = "seam_full"
@@ -117,8 +124,8 @@ def test_one_method_failure_does_not_block_other_methods(tmp_path: Path) -> None
         CandidateRecord.model_validate_json(path.read_text(encoding="utf-8"))
         for path in (tmp_path / "runs" / "failure-run").glob("candidates/*/*/candidate.json")
     ]
-    assert len(records) == 10
-    assert sum(record.output is not None for record in records) == 8
+    assert len(records) == 14
+    assert sum(record.output is not None for record in records) == 12
 
 
 def test_run_marks_manifest_failed_when_analyzer_cannot_start(

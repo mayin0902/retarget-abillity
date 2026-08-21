@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Literal
 
@@ -28,12 +29,64 @@ CN_SQUARE_SEVEN_METHODS = (
     "mesh_full",
     "seam_scale",
 )
+RETARGET_DEFAULT_METHODS = CN_SQUARE_SEVEN_METHODS
 METHOD_PROFILES = {
     "cn_square_v1": CN_SQUARE_METHODS,
     "cn_square_v2": CN_SQUARE_SEVEN_METHODS,
     "legacy_four_v1": LEGACY_FOUR_METHODS,
     "retarget_default_v1": CN_SQUARE_SEVEN_METHODS,
 }
+
+RETARGET_DEFAULT_METHOD_PARAMETERS: dict[str, dict[str, Any]] = {
+    "direct_warp": {"interpolation": "lanczos"},
+    "crop": {"grid_step": 48, "scales": [1.0, 0.94, 0.88]},
+    "seam": {
+        "max_seams_per_axis": 24,
+        "protection_weight": 18.0,
+        "tolerance_weight": 3.0,
+    },
+    "seam_full": {
+        "proxy_long_edge": 512,
+        "protection_weight": 24.0,
+        "tolerance_weight": 2.5,
+        "unsafe_mean_importance": 0.45,
+        "unsafe_peak_importance": 0.90,
+    },
+    "mesh": {
+        "grid_columns": 12,
+        "grid_rows": 12,
+        "protection_gain": 1.8,
+        "minimum_cell_fraction": 0.25,
+    },
+    "mesh_full": {
+        "grid_columns": 12,
+        "grid_rows": 12,
+        "protection_gain": 5.0,
+        "uniform_anchor_weight": 0.18,
+        "smoothness_weight": 0.65,
+        "unsafe_anisotropy": 4.5,
+    },
+    "seam_scale": {
+        "proxy_long_edge": 512,
+        "seam_fraction": 0.45,
+        "protection_weight": 24.0,
+        "tolerance_weight": 2.5,
+        "unsafe_mean_importance": 0.45,
+        "unsafe_peak_importance": 0.90,
+    },
+}
+
+
+def method_parameters_for_profile(profile: str) -> dict[str, dict[str, Any]]:
+    """Return an isolated parameter mapping for one frozen method profile."""
+    methods = METHOD_PROFILES.get(profile)
+    if methods is None:
+        raise ValueError(f"unknown method profile: {profile}")
+    if profile != "retarget_default_v1":
+        return {}
+    return deepcopy(
+        {method: RETARGET_DEFAULT_METHOD_PARAMETERS[method] for method in methods}
+    )
 
 
 class AnalysisConfig(BaseModel):
@@ -80,8 +133,8 @@ class RunConfig(BaseModel):
         "legacy_four_v1",
         "retarget_default_v1",
         "custom",
-    ] = "cn_square_v1"
-    methods: tuple[str, ...] = CN_SQUARE_METHODS
+    ] = "retarget_default_v1"
+    methods: tuple[str, ...] = RETARGET_DEFAULT_METHODS
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
     method_parameters: dict[str, dict[str, Any]] = Field(default_factory=dict)
     selector: SelectorConfig = Field(default_factory=SelectorConfig)
@@ -95,6 +148,8 @@ class RunConfig(BaseModel):
         if "method_profile" not in self.model_fields_set:
             if "methods" in self.model_fields_set and active_methods == LEGACY_FOUR_METHODS:
                 active_profile = "legacy_four_v1"
+            elif "methods" in self.model_fields_set and active_methods == CN_SQUARE_METHODS:
+                active_profile = "cn_square_v1"
             elif (
                 "methods" not in self.model_fields_set
                 and self.method_parameters

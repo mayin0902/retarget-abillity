@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -118,6 +119,28 @@ def test_selection_order_is_a_real_swappable_seam(tmp_path: Path) -> None:
     assert deterministic_ranking((high_unsafe, lower_safe), quality_first.selection)[0] == (
         high_unsafe.candidate_id
     )
+
+
+def test_strategy_snapshots_separate_agent_knowledge(tmp_path: Path) -> None:
+    version_dir = tmp_path / "v-next"
+    shutil.copytree(ROOT / "strategies/movie60/v3_3", version_dir)
+    shutil.copy2(
+        ROOT / "agent_skills/qwen4-selector/v8/skill.yaml",
+        version_dir / "agent-skill.yaml",
+    )
+    shutil.copy2(
+        ROOT / "agent_skills/qwen4-selector/v8/agent-knowledge.yaml",
+        version_dir / "agent-knowledge.yaml",
+    )
+
+    loaded = load_strategy_bundle(version_dir / "bundle.yaml")
+    assert len(loaded.agent_skill.case_knowledge) == 12
+    assert "agent-knowledge.yaml" in loaded.file_hashes
+    snapshot = loaded.snapshot_to(tmp_path / "snapshot")
+    assert (snapshot / "agent-knowledge.yaml").is_file()
+    reloaded = load_strategy_bundle(snapshot / "bundle.yaml")
+    assert reloaded.agent_skill.render() == loaded.agent_skill.render()
+    assert reloaded.agent_skill_sha256 == loaded.agent_skill_sha256
 
 
 def test_strategy_references_cannot_escape_version_directory(tmp_path: Path) -> None:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 ARCHIVE_FOLDERS = REPO_ROOT / "deliverables" / "_archive" / "folders"
 SOURCE = ARCHIVE_FOLDERS / "movie60-rule-anchored-v6-final-20260819"
 ROUTE_SOURCE = (

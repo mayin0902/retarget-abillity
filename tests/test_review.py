@@ -67,7 +67,7 @@ def test_review_save_resume_and_edit_are_append_only(tmp_path: Path) -> None:
         run_dir,
         "reviewer-one",
         workspace["tasks"][0]["task"]["task_id"],
-        _payload(workspace, ["A", "B", "C", "D", "Skip"]),
+        _payload(workspace, ["A", "B", "C", "D", "Skip", "A", "B"]),
     )
     resumed = load_review_workspace(run_dir, "reviewer-one")
     assert resumed["completed_task_count"] == 1
@@ -77,30 +77,32 @@ def test_review_save_resume_and_edit_are_append_only(tmp_path: Path) -> None:
         "C",
         "D",
         "Skip",
+        "A",
+        "B",
     ]
     second = save_task_reviews(
         run_dir,
         "reviewer-one",
         resumed["tasks"][0]["task"]["task_id"],
-        _payload(resumed, ["B", "A", "C", "D", "Skip"]),
+        _payload(resumed, ["B", "A", "C", "D", "Skip", "A", "B"]),
     )
     assert all(
         new["supersedes_event_id"] == old["event_id"]
         for old, new in zip(first, second, strict=True)
     )
     events = SqliteEventStore(run_dir / "events.sqlite").review_events("review-run")
-    assert len(events) == 10
+    assert len(events) == 14
     report = build_run_report(run_dir)
-    assert report["reviews"]["active_review_events"] == 5
+    assert report["reviews"]["active_review_events"] == 7
     assert report["reviews"]["skip_count"] == 1
-    assert report["reviews"]["scored_count_excluding_skip"] == 4
+    assert report["reviews"]["scored_count_excluding_skip"] == 6
 
 
 def test_review_rejects_incomplete_task_and_invalid_best(tmp_path: Path) -> None:
     run_dir = _review_run(tmp_path)
     workspace = load_review_workspace(run_dir, "reviewer-one")
     task_id = workspace["tasks"][0]["task"]["task_id"]
-    payload = _payload(workspace, ["A", "B", "C", "D", "Skip"])
+    payload = _payload(workspace, ["A", "B", "C", "D", "Skip", "A", "B"])
     with pytest.raises(ValueError, match="every attempted candidate"):
         save_task_reviews(run_dir, "reviewer-one", task_id, payload[:-1])
     payload[0]["grade"] = "Skip"

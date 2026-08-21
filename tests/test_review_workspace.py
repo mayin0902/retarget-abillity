@@ -184,6 +184,63 @@ def test_latest_completed_run_uses_status_field(tmp_path: Path) -> None:
     assert latest_completed_run(tmp_path) == completed.resolve()
 
 
+def test_run_adapter_keeps_failed_method_in_denominator(tmp_path: Path) -> None:
+    run = _run(tmp_path)
+    task_id = "source-1__square-64"
+    failed_id = f"{task_id}--seam_full--default"
+    failed = CandidateRecord(
+        candidate_id=failed_id,
+        task_id=task_id,
+        method_id="seam_full",
+        method_version="1.0.0",
+        variant_id="default",
+        run_id="demo-run",
+        input_sha256="0" * 64,
+        output=None,
+        target_width=64,
+        target_height=64,
+        seed=1,
+        config_hash="a" * 64,
+        analysis_artifact_id="analysis-1",
+        generation_status=GenerationStatus.FAILED,
+        failure_type="RuntimeError",
+        error_summary="fixture failure",
+    )
+    _write_json(
+        run / "candidates" / task_id / "seam_full" / "candidate.json",
+        failed.model_dump(mode="json"),
+    )
+    _write_json(
+        run / "evaluations" / "rule-current" / "metrics" / f"{failed_id}.json",
+        {
+            "candidate_id": failed_id,
+            "metrics": {
+                "technical_valid": False,
+                "hard_failures": "candidate_output_missing",
+                "quality_score": None,
+                "proxy_grade": "proxy_c",
+            },
+        },
+    )
+    manifest = json.loads((run / "run.json").read_text(encoding="utf-8"))
+    manifest["methods"] = ["crop", "seam_full"]
+    manifest["candidate_ids"].append(failed_id)
+    manifest["failed_candidate_ids"] = [failed_id]
+    manifest["status"] = "PARTIAL_COMPLETED"
+    _write_json(run / "run.json", manifest)
+
+    workspace = RunReviewAdapter(run).workspace("all")
+    candidates = workspace["tasks"][0]["candidates"]
+    assert len(candidates) == 2
+    assert all(candidate["rule_denominator"] == 2 for candidate in candidates)
+    failed_view = next(item for item in candidates if item["method"] == "seam_full")
+    assert failed_view["available"] is False
+    assert failed_view["machine_grade"] == "N/A"
+    assert failed_view["machine_score"] is None
+    assert failed_view["failure_type"] == "RuntimeError"
+    assert "生成失败" in failed_view["status_text"]
+
+
 def test_imported_case_is_frozen_and_reviewable_without_fake_scores(
     tmp_path: Path,
 ) -> None:

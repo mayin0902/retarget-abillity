@@ -104,7 +104,7 @@ class RetargetApplicationService:
                 else None
             )
             skill_sha256 = (
-                strategy.file_hashes[strategy.bundle.agent_skill]
+                strategy.agent_skill_sha256
                 if strategy is not None
                 else loaded_skill.source_sha256
                 if loaded_skill is not None

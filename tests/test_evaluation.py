@@ -327,6 +327,12 @@ def test_evaluate_run_writes_separate_replay_artifacts(
 
     assert manifest.candidate_ids == (candidate.candidate_id,)
     assert store.path("evaluations/evaluation-1/summary.json").is_file()
+    rule_decision = store.read_json(
+        f"evaluations/evaluation-1/rule-decisions/{task.task_id}.json"
+    )
+    assert rule_decision["candidate_ranking"] == [candidate.candidate_id]
+    assert rule_decision["selected_candidate_id"] == candidate.candidate_id
+    assert rule_decision["decision_source"] == "evaluation"
     assert sha256_file(store.path(candidate_path)) == candidate_hash_before
 
     detected_shapes: list[tuple[int, ...]] = []

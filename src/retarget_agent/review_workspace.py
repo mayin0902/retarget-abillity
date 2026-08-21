@@ -22,7 +22,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import CandidateRecord, RunManifest, TaskSpec, validate_id
+from .models import CandidateRecord, GenerationStatus, RunManifest, TaskSpec, validate_id
 from .movie60_review_app import (
     Movie60Media,
     Movie60ReviewItem,
@@ -528,7 +528,7 @@ class RunReviewAdapter(_IndexedAdapter):
         candidates_by_task: dict[str, list[CandidateRecord]] = {}
         for path in sorted(self.root.glob("candidates/*/*/candidate.json")):
             record = CandidateRecord.model_validate_json(path.read_text(encoding="utf-8"))
-            if record.output is not None and record.candidate_id in self.metrics:
+            if record.candidate_id in self.metrics:
                 candidates_by_task.setdefault(record.task_id, []).append(record)
         all_tasks: list[dict[str, Any]] = []
         route_tasks: list[dict[str, Any]] = []
@@ -536,13 +536,15 @@ class RunReviewAdapter(_IndexedAdapter):
             task = TaskSpec.model_validate(_read_json(self.root / "tasks" / f"{task_id}.json"))
             source = self._source_path(task)
             records = candidates_by_task.get(task_id, [])
-            ranked = sorted(
-                records,
-                key=lambda item: (
-                    -_number(self.metrics[item.candidate_id].get("quality_score")),
-                    item.method_id,
-                ),
+            from .rule_selection import load_rule_decision
+
+            rule_decision = load_rule_decision(
+                self.root, self.evaluation_dir.name, task_id
             )
+            by_id = {record.candidate_id: record for record in records}
+            if set(rule_decision.candidate_ranking) != set(by_id):
+                raise ValueError(f"{task_id}: Rule decision does not match Run candidates")
+            ranked = [by_id[candidate_id] for candidate_id in rule_decision.candidate_ranking]
             agent = self.agent_decisions.get(task_id)
             agent_ranking = list(agent.get("candidate_ranking", ())) if agent else []
             agent_rank = {
@@ -555,39 +557,76 @@ class RunReviewAdapter(_IndexedAdapter):
             for rule_rank, record in enumerate(ranked, 1):
                 route = _safe_route(record.method_id, used_routes)
                 metrics = self.metrics[record.candidate_id]
-                self._add_media(
-                    "all",
-                    task_id,
-                    f"candidate_{route}",
-                    self.root / record.output.relative_path,
+                available = (
+                    record.output is not None
+                    and record.generation_status is not GenerationStatus.FAILED
                 )
+                if available and record.output is not None:
+                    self._add_media(
+                        "all",
+                        task_id,
+                        f"candidate_{route}",
+                        self.root / record.output.relative_path,
+                    )
                 is_agent_top = record.candidate_id == agent_top
+                is_rule_top = record.candidate_id == rule_decision.selected_candidate_id
+                failure_detail = " · ".join(
+                    item
+                    for item in (
+                        record.failure_type,
+                        record.error_summary,
+                    )
+                    if item
+                )
                 candidates.append(
                     {
                         "candidate_id": record.candidate_id,
                         "route": route,
                         "title": f"Rule 第{rule_rank}名 · {record.method_id}",
                         "method": record.method_id,
-                        "machine_grade": _grade(metrics.get("proxy_grade")) or "N/A",
-                        "machine_score": _number(metrics.get("quality_score")),
+                        "machine_grade": (
+                            _grade(metrics.get("proxy_grade")) or "N/A"
+                            if available
+                            else "N/A"
+                        ),
+                        "machine_score": (
+                            _number(metrics.get("quality_score")) if available else None
+                        ),
                         "codex_grade": (
                             _grade(agent.get("proxy_grade"))
                             if is_agent_top and agent
                             else None
                         ),
-                        "available": True,
+                        "available": available,
                         "status_text": (
                             "Rule Top1"
-                            if rule_rank == 1
+                            if is_rule_top
                             else "Agent Top1"
                             if is_agent_top
+                            else f"生成失败：{failure_detail or '未产生输出'}"
+                            if not available
                             else "普通候选"
                         ),
-                        "image_url": f"/v1/media/all/{task_id}/candidate_{route}",
+                        "image_url": (
+                            f"/v1/media/all/{task_id}/candidate_{route}"
+                            if available
+                            else None
+                        ),
                         "native_url": None,
                         "rule_rank": rule_rank,
                         "rule_denominator": len(ranked),
-                        "rule_reason": self._rule_reason(metrics),
+                        "rule_reason": (
+                            self._rule_reason(metrics)
+                            if available
+                            else (
+                                "该方法生成失败，不参与人工评分："
+                                f"{failure_detail or '未产生输出'}。"
+                            )
+                        ),
+                        "generation_status": record.generation_status.value,
+                        "failure_type": record.failure_type,
+                        "error_summary": record.error_summary,
+                        "rule_decision_source": rule_decision.decision_source,
                         "rule_metrics": {
                             "ocr_recall": metrics.get("ocr_character_recall"),
                             "person_preservation": metrics.get("person_count_preservation"),
@@ -627,7 +666,7 @@ class RunReviewAdapter(_IndexedAdapter):
                             list(agent.get("reason_codes", ())) if agent else []
                         ),
                         "review_rationale": None,
-                        "final_selected": rule_rank == 1,
+                        "final_selected": is_rule_top,
                         "model_advice_grade": None,
                         "model_advice_reason": "",
                         "model_advice_scope": "未运行",
@@ -670,7 +709,13 @@ class RunReviewAdapter(_IndexedAdapter):
         self._add_media("routes", task_id, "comparison", source)
         if not all_candidates:
             return []
-        rule = dict(all_candidates[0])
+        rule_candidate = next(
+            (candidate for candidate in all_candidates if candidate.get("final_selected")),
+            None,
+        )
+        if rule_candidate is None:
+            return []
+        rule = dict(rule_candidate)
         rule.update(
             {
                 "route": "rule",
@@ -678,14 +723,18 @@ class RunReviewAdapter(_IndexedAdapter):
                 "image_url": f"/v1/media/routes/{task_id}/rule",
             }
         )
-        source_media = self._media[("all", task_id, f"candidate_{all_candidates[0]['route']}")]
+        source_media = self._media[("all", task_id, f"candidate_{rule_candidate['route']}")]
         self._media[("routes", task_id, "rule")] = source_media
         result = [rule]
         agent_candidate = next(
             (candidate for candidate in all_candidates if candidate["candidate_id"] == agent_top),
             None,
         )
-        if agent_candidate and agent_candidate["candidate_id"] != rule["candidate_id"]:
+        if (
+            agent_candidate
+            and agent_candidate["available"]
+            and agent_candidate["candidate_id"] != rule["candidate_id"]
+        ):
             agent = dict(agent_candidate)
             agent.update(
                 {
@@ -941,7 +990,14 @@ def latest_completed_run(runs_root: Path) -> Path:
                 continue
             manifest = _read_json(manifest_path)
             status = manifest.get("status", manifest.get("state", ""))
-            if str(status).upper() == "COMPLETED":
+            has_evaluation = any(
+                (path / "evaluation.json").is_file()
+                for path in (child / "evaluations").glob("*")
+            )
+            if (
+                str(status).upper() in {"COMPLETED", "PARTIAL_COMPLETED"}
+                and has_evaluation
+            ):
                 choices.append(child)
     if not choices:
         raise FileNotFoundError(f"no completed Generation Run under {root}")

@@ -938,18 +938,12 @@ def run_agent_replay(
             )
             candidates.append(item)
             all_evidence[item.candidate_id] = item
-        if strategy_bundle is not None:
-            from .plugin_catalog import built_in_plugin_catalog
+        from .rule_selection import load_rule_decision
 
-            rule_selector = built_in_plugin_catalog().selectors.get(
-                strategy_bundle.bundle.rule_selector_plugin
-            )
-        else:
-            rule_selector = deterministic_ranking
-        ranking = rule_selector(
-            tuple(candidates),
-            strategy_bundle.selection if strategy_bundle is not None else None,
-        )
+        frozen_rule = load_rule_decision(run_dir, evaluation_id, task_id)
+        ranking = frozen_rule.candidate_ranking
+        if set(ranking) != {candidate.candidate_id for candidate in candidates}:
+            raise ValueError(f"{task_id}: frozen Rule ranking does not match Evaluation candidates")
         request = JudgeAgentRequest(
             task_id=task_id,
             candidates=tuple(candidates),

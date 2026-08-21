@@ -12,6 +12,7 @@ from typing import Any
 import yaml
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from .config import METHOD_PROFILES, method_parameters_for_profile
 from .defaults import current_strategy_path, load_default_config
 from .hashing import sha256_file
 from .service import RetargetApplicationService
@@ -66,47 +67,6 @@ def _image_size(path: Path) -> tuple[int, int]:
             return ImageOps.exif_transpose(opened).size
     except (OSError, UnidentifiedImageError) as error:
         raise ValueError(f"input is not a decodable image: {path}") from error
-
-
-def _method_parameters() -> dict[str, dict[str, Any]]:
-    return {
-        "direct_warp": {"interpolation": "lanczos"},
-        "crop": {"grid_step": 48, "scales": [1.0, 0.94, 0.88]},
-        "seam": {
-            "max_seams_per_axis": 24,
-            "protection_weight": 18.0,
-            "tolerance_weight": 3.0,
-        },
-        "seam_full": {
-            "proxy_long_edge": 512,
-            "protection_weight": 24.0,
-            "tolerance_weight": 2.5,
-            "unsafe_mean_importance": 0.45,
-            "unsafe_peak_importance": 0.90,
-        },
-        "mesh": {
-            "grid_columns": 12,
-            "grid_rows": 12,
-            "protection_gain": 1.8,
-            "minimum_cell_fraction": 0.25,
-        },
-        "mesh_full": {
-            "grid_columns": 12,
-            "grid_rows": 12,
-            "protection_gain": 5.0,
-            "uniform_anchor_weight": 0.18,
-            "smoothness_weight": 0.65,
-            "unsafe_anisotropy": 4.5,
-        },
-        "seam_scale": {
-            "proxy_long_edge": 512,
-            "seam_fraction": 0.45,
-            "protection_weight": 24.0,
-            "tolerance_weight": 2.5,
-            "unsafe_mean_importance": 0.45,
-            "unsafe_peak_importance": 0.90,
-        },
-    }
 
 
 def materialize_image_dataset(
@@ -196,15 +156,7 @@ def materialize_image_dataset(
         "seed": 20260821,
         "device": "cpu",
         "method_profile": "retarget_default_v1",
-        "methods": [
-            "direct_warp",
-            "crop",
-            "seam",
-            "seam_full",
-            "mesh",
-            "mesh_full",
-            "seam_scale",
-        ],
+        "methods": list(METHOD_PROFILES["retarget_default_v1"]),
         "analysis": {
             "gradient_weight": 0.40,
             "contrast_weight": 0.30,
@@ -216,7 +168,7 @@ def materialize_image_dataset(
             ),
             "model_root": "models/analyzers",
         },
-        "method_parameters": _method_parameters(),
+        "method_parameters": method_parameters_for_profile("retarget_default_v1"),
         "selector": {"selector_id": "technical_risk_v1"},
     }
     config_path = root / "run.yaml"
@@ -266,6 +218,9 @@ def execute_images(
         evaluation_id,
         strategy_path=current_strategy_path(root),
     )
+    from .rule_selection import materialize_selected_results
+
+    selected_results = materialize_selected_results(run_dir, evaluation["evaluation_id"])
     result: dict[str, Any] = {
         "status": "completed",
         "run_id": run_id,
@@ -275,6 +230,10 @@ def execute_images(
         "task_count": len(generation["task_ids"]),
         "candidate_count": len(generation["candidate_ids"]),
         "evaluation_id": evaluation["evaluation_id"],
+        "selected_results": selected_results["results"],
+        "result_path": (
+            str(run_dir / "result.png") if (run_dir / "result.png").is_file() else None
+        ),
         "review_command": f"retarget-engine review open \"{run_dir}\"",
         "agent": {"status": "not_requested"},
     }

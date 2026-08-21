@@ -15,6 +15,6 @@ Git。materialize 后形成60个唯一1:1 Task：电影海报、影视剧照、�
 
 ```powershell
 $env:PYTHONPATH = (Resolve-Path src).Path
-python scripts/materialize_movie_visual60.py
+python experiments/movie60/scripts/materialize_movie_visual60.py
 python -m retarget_agent.cli dataset validate local_data/datasets/movie_visual_60_v1
 ```
