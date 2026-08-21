@@ -1,5 +1,8 @@
 {
   "release_id": "movie60-review-v3",
+  "github_release_tag": "v0.7.1",
+  "legacy_github_release_tag": "movie60-review-v3",
+  "release_version": "v3",
   "dataset": "movie-visual-60-v1@1.0.0",
   "run_id": "movie60-square-v1-20260818",
   "evaluation_id": "movie60-human-aligned-v3-3-20260821",

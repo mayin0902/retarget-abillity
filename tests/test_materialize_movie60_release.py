@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import zipfile
 from pathlib import Path
 
@@ -73,6 +74,34 @@ def test_v3_root_and_asset_names_are_independent(tmp_path: Path) -> None:
 
     assert (output / "README.md").read_bytes() == b"core"
     assert (output / "evidence.txt").read_bytes() == b"evidence"
+
+
+def test_release_defaults_are_loaded_and_asset_names_are_cross_checked(
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "CURRENT_RELEASE.json"
+    config.write_text(
+        json.dumps(
+            {
+                "github_release_tag": "v0.7.1",
+                "release_version": "v3",
+                "release_asset_names": list(materialize_movie60_release.asset_names("v3")),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert materialize_movie60_release.release_defaults(config) == ("v0.7.1", "v3")
+
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["release_asset_names"] = ["wrong.zip"]
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="asset names"):
+        materialize_movie60_release.release_defaults(config)
+
+
+def test_repository_current_release_points_to_unified_software_release() -> None:
+    assert materialize_movie60_release.release_defaults() == ("v0.7.1", "v3")
 
 
 def test_materializer_rejects_hash_mismatch(tmp_path: Path) -> None:

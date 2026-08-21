@@ -117,9 +117,11 @@ gh auth login
 powershell -ExecutionPolicy Bypass -File scripts\materialize_review.ps1
 ```
 
-脚本从私有 GitHub Release 下载当前资产，按 `CURRENT_RELEASE.json` 校验 SHA-256，再解压到
+脚本从 `CURRENT_RELEASE.json` 指向的私有 GitHub Release 下载当前资产，按随包
+`SHA256SUMS.txt` 校验 SHA-256，再解压到
 Git 忽略目录 `local_data\movie60-review-current`。已有且校验通过时脚本会直接复用，不重复
-下载。
+下载。`v0.7.1` 起，Wheel、Movie60 core、完整 evidence 和校验文件位于同一个 Release；
+原 `movie60-review-v3` Pre-release 只保留作历史追溯。
 
 显式打开 Movie60：
 
