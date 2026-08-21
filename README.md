@@ -41,8 +41,11 @@ PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
 
 ## 文档
 
-- [交接大纲](docs/HANDOFF_OUTLINE.md)
-- [开发交接详细讲义](docs/HANDOFF_DETAILED_GUIDE.md)
+- [开发操作手册：Clone、安装、单图、批量与 Rule-only](docs/DEVELOPER_OPERATION_MANUAL.md)
+- [开发操作手册工程详解版](docs/DEVELOPER_OPERATION_MANUAL_DETAILED.md)
+- [算法原理：重定向、检测比较、评分与 Agent](docs/DEVELOPER_ALGORITHM_PRINCIPLES.md)
+- [算法变量与公式工程参考](docs/DEVELOPER_ALGORITHM_REFERENCE.md)
+- [Movie60 当前数据、评分和 Agent 路线状态](docs/reviews/movie60-v3/CURRENT_DATA_AND_ROUTE_STATUS.md)
 - [插件与策略迭代](docs/PLUGIN_STRATEGY_GUIDE.md)
 - [七种算法](docs/ALGORITHMS.md)
 - [人工评审](docs/REVIEW_GUIDE.md)
