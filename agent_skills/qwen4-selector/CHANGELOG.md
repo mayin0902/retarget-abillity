@@ -1,5 +1,11 @@
 # Qwen4 selector skill changelog
 
+## 2.4.0
+
+- Adds a fully Simplified-Chinese general Skill for the next Strategy version.
+- Splits reusable visual precedents into a lightweight, versioned `agent-knowledge.yaml`.
+- Keeps current `movie60@3.3.0` immutable; adoption requires a new StrategyBundle.
+
 ## 2.3.0
 
 - Requires every free-text output value to use concise Simplified Chinese.

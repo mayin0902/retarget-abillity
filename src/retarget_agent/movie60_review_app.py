@@ -171,6 +171,19 @@ class Movie60ReviewWorkspace:
             "release_id": self.version.get("release_id"),
             "strategy_version": self.version.get("strategy_version"),
             "evaluation_id": self.version.get("evaluation_id"),
+            "workspace_kind": "movie60",
+            "modes": [
+                {
+                    "id": "all60",
+                    "label": "完整 60 张",
+                    "detail": "7候选逐张评分（420张）",
+                },
+                {
+                    "id": "focus20",
+                    "label": "重点 20 张",
+                    "detail": "Rule / Agent / AIGC",
+                },
+            ],
         }
 
     @staticmethod
@@ -341,6 +354,15 @@ class Movie60ReviewWorkspace:
         return {
             "mode": mode,
             "release": self.version,
+            "mode_label": "完整 60 张" if mode == "all60" else "重点 20 张",
+            "mode_description": (
+                "完整60张：逐张校对七种候选，共420张；同时核对Rule与Agent判分。"
+                if mode == "all60"
+                else "重点20张：分别评价Rule、Agent和成功回图的AIGC。"
+            ),
+            "candidate_heading": (
+                "全部七种候选" if mode == "all60" else "Rule / Agent / AIGC"
+            ),
             "task_count": len(tasks),
             "completed_task_count": sum(self._complete(task) for task in tasks),
             "tasks": tasks,

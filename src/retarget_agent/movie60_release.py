@@ -376,7 +376,7 @@ def _legacy_index(output: Path) -> None:
 |---|---|---|---|
 | movie60-review-v1 | 第一份内部人工评审包 | 旧 Rule/Agent；人工记录较少 | 私有 GitHub Release 标签 `movie60-review-v1` |
 | movie60-review-v2 | 60×7 候选、Focus20 AIGC 和早期 v3 证据 | `all60` 主表仍混有旧评分；启动脚本绑定外部仓库 | 私有 GitHub Release 标签 `movie60-review-v2`；本机原目录仍保留 |
-| v3/v3.1/v3.2 研究证据 | Rule/Agent 策略迭代 | 同集代理校准，不能视作独立人工验证 | 代码仓 `docs/reviews/movie60-v3/` 与 Git 历史 |
+| v3/v3.1/v3.2 研究证据 | Rule/Agent 策略迭代 | 同集代理校准，不能视作独立人工验证 | Git 历史与对应旧 Release |
 
 当前唯一推荐入口是数据包根目录的 `START_HERE.html` 和 `START_REVIEW.bat`。
 旧包没有被删除或覆盖；如需审计，通过 Release 标签或 Git Commit 查找。
@@ -731,26 +731,11 @@ Agent 总览、高清三候选复核、配对复核与逐候选指标。历史�
             )
 
         documentation = root / "documentation"
-        review_source = sources.repository / "docs" / "reviews" / "movie60-v3"
-        review_target = documentation / "movie60-v3"
         for name in (
-            "README.md",
-            "CURRENT_DATA_AND_ROUTE_STATUS.md",
-            "RULE_V3_3_HUMAN_THRESHOLD_REPORT.md",
-            "AGENT_V3_3_CURRENT_REPORT.md",
-            "deployment-freeze-v3-3.json",
-        ):
-            _copy_file(review_source / name, review_target / name)
-        for name in ("agent-v3-3-development", "agent-v3-3-proxy-holdout"):
-            shutil.copytree(review_source / name, review_target / name)
-        for name in (
-            "DEVELOPER_OPERATION_MANUAL.md",
-            "DEVELOPER_OPERATION_MANUAL_DETAILED.md",
-            "DEVELOPER_ALGORITHM_PRINCIPLES.md",
-            "DEVELOPER_ALGORITHM_REFERENCE.md",
-            "MOVIE60_V3_RULE_AGENT_GUIDE.md",
-            "MOVIE60_REVIEW_V3_RELEASE.md",
-            "REVIEW_GUIDE.md",
+            "QUICKSTART.md",
+            "REVIEW_AND_SCORING.md",
+            "ARCHITECTURE.md",
+            "ADVANCED.md",
         ):
             _copy_file(sources.repository / "docs" / name, documentation / name)
         shutil.copytree(

@@ -1,0 +1,8 @@
+schema_version: "1.0"
+profile_id: company-private-agent
+# Fill these values on the company computer. Never commit a real token.
+backend_url: https://replace-with-company-endpoint.example/v1
+model_id: replace-with-company-model-id
+api_key_env: RETARGET_AGENT_API_KEY
+mode: conditional_agent
+maximum_calls: 20

@@ -4,14 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <title>Movie60 · 人工质量评审</title>
+    <title>图片重定向 · 人工质量评审</title>
     <link rel="stylesheet" href="/assets/app.css">
     <script src="/assets/app.js" defer></script>
   </head>
   <body>
     <aside class="sidebar">
       <div class="brand">
-        <strong>Movie60</strong>
+        <strong>Retarget Review</strong>
         <span>人工质量评审</span>
       </div>
 
@@ -26,14 +26,7 @@
 
       <section class="side-section">
         <span class="section-label">评审范围</span>
-        <div class="mode-switch">
-          <button class="mode-button active" data-mode="all60" type="button">
-            <strong>完整 60 张</strong><span>7候选逐张评分（420张）</span>
-          </button>
-          <button class="mode-button" data-mode="focus20" type="button">
-            <strong>重点 20 张</strong><span>Rule / Agent / AIGC</span>
-          </button>
-        </div>
+        <div id="mode-switch" class="mode-switch"></div>
       </section>
 
       <section class="side-section">

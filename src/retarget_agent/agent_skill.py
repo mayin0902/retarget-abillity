@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 from pydantic import Field, field_validator
 
-from .hashing import sha256_file
+from .hashing import sha256_file, sha256_json
 from .models import FrozenModel, validate_id
 
 
@@ -85,9 +85,33 @@ def load_agent_skill(path: Path) -> LoadedAgentSkill:
     raw = yaml.safe_load(resolved.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("Agent skill must be a YAML mapping")
+    knowledge_name = raw.pop("knowledge_file", None)
+    source_sha256 = sha256_file(resolved)
+    if knowledge_name is not None:
+        knowledge_path = PurePosixPath(str(knowledge_name).replace("\\", "/"))
+        if knowledge_path.is_absolute() or ".." in knowledge_path.parts:
+            raise ValueError("knowledge_file must stay below the Skill directory")
+        if raw.get("case_knowledge"):
+            raise ValueError("use knowledge_file or inline case_knowledge, not both")
+        knowledge_file = resolved.parent / knowledge_path.as_posix()
+        knowledge_raw = yaml.safe_load(knowledge_file.read_text(encoding="utf-8"))
+        if not isinstance(knowledge_raw, dict) or not isinstance(
+            knowledge_raw.get("cases"), list
+        ):
+            raise ValueError("Agent knowledge must be a mapping containing a cases list")
+        unknown = set(knowledge_raw) - {"schema_version", "knowledge_id", "version", "cases"}
+        if unknown:
+            raise ValueError(f"unknown Agent knowledge fields: {sorted(unknown)}")
+        raw["case_knowledge"] = knowledge_raw["cases"]
+        source_sha256 = sha256_json(
+            {
+                "skill_sha256": source_sha256,
+                "knowledge_sha256": sha256_file(knowledge_file),
+            }
+        )
     return LoadedAgentSkill(
         skill=AgentSkill.model_validate(raw),
-        source_sha256=sha256_file(resolved),
+        source_sha256=source_sha256,
     )
 
 

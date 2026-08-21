@@ -1,0 +1,39 @@
+schema_version: "1.0"
+knowledge_id: human-visual-retargeting-cases
+version: "1.0.0"
+cases:
+  - case_id: border_contact_not_missing
+    situation: 主体接触画面边缘，但身份、脸和有意义的身体部分仍连贯。
+    expected_judgement: 不因贴边自动失败；构图可发布时给 A/B。
+    rationale: 紧凑取景不等于删除主体。
+    counterexample: 脸、关键肢体、商品或伴侣被切到改变身份或关系。
+  - case_id: clean_secondary_crop
+    situation: 次要群众、装饰文案或低优先级边缘信息被干净裁掉，核心传播完整。
+    expected_judgement: 通常给 A/B。
+    rationale: 业务可用性优先于逐像素完整。
+  - case_id: global_aspect_tolerance
+    situation: 存在均匀比例变化，但人物、文字和显著物体仍自然。
+    expected_judgement: 通常给 B；肉眼不受影响时可给 A。
+    rationale: 目标比例变化本身不是缺陷。
+    counterexample: 局部解剖、文字或刚性结构发生独立弯曲。
+  - case_id: main_relation_loss
+    situation: 情侣、群体互动或人商品关系变成孤立单主体。
+    expected_judgement: 核心叙事改变给 D，否则至少 C。
+    rationale: 实例关系属于语义内容。
+  - case_id: rigid_object_damage
+    situation: 显著乐器、伞、框架、包装或 Logo 弯折、夹扁或复制。
+    expected_judgement: 给 C；大面积发布事故给 D。
+    rationale: 刚性结构的非物理形变在正常观看尺寸下明显。
+  - case_id: detector_visual_conflict
+    situation: OCR 或数量指标下降，但高清原图候选对显示内容完整可读。
+    expected_judgement: 降低检测器证据置信度，保留视觉可发布的 A/B。
+    rationale: 检测失败不等于图片真的损坏。
+  - case_id: dominant_title_role
+    situation: 人物仍在，但海报主标题、活动标或主 Logo 丢失或明显损坏。
+    expected_judgement: 需要修复给 C；严重误导或破坏才给 D。
+    rationale: 主视觉文字本身就是核心主体。
+    counterexample: 小演职员表、法务小字或次要平台标被干净裁掉。
+  - case_id: aesthetic_crop_over_similarity
+    situation: 裁剪移除次要细节但得到均衡自然画面，另一高相似候选有明显拉伸。
+    expected_judgement: 优先自然裁剪。
+    rationale: 人类视觉偏好不等于像素相似度最大。

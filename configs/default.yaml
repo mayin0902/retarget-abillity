@@ -1,0 +1,10 @@
+schema_version: "1.0"
+strategy: current
+method_profile: retarget_default_v1
+analysis_profile: company_cpu_v2
+default_target: 1536x1536
+review:
+  host: 127.0.0.1
+  port: 8765
+  movie60_workspace: local_data/movie60-review-current
+  runs_root: runs

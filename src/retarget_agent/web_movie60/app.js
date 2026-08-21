@@ -17,10 +17,11 @@ const ISSUE_LABELS = {
 };
 
 const state = {
-  mode: "all60",
+  mode: null,
+  ready: null,
   workspace: null,
   index: 0,
-  reviewerId: localStorage.getItem("movie60-reviewer-id") || "local-reviewer",
+  reviewerId: localStorage.getItem("retarget-reviewer-id") || "local-reviewer",
   draft: {},
   dirty: false,
 };
@@ -62,7 +63,7 @@ function taskComplete(task) {
 
 function draftKey(task = currentTask()) {
   if (!task) return "";
-  return `movie60-review-v1:${state.mode}:${state.reviewerId}:${task.task_id}`;
+  return `retarget-review-v1:${state.mode}:${state.reviewerId}:${task.task_id}`;
 }
 
 function buildDraft(task) {
@@ -170,7 +171,8 @@ function machineEvidence(candidate) {
   if (candidate.rule_reason) {
     const ruleScore = Number(candidate.machine_score).toFixed(2);
     const agentGrade = candidate.agent_grade || "未独立判级";
-    const agentRank = candidate.agent_rank ? `${candidate.agent_rank}/7` : "无";
+    const denominator = candidate.rule_denominator || 7;
+    const agentRank = candidate.agent_rank ? `${candidate.agent_rank}/${denominator}` : "无";
     const selected = candidate.final_selected
       ? '<span class="selection-badge">当前最终选择</span>'
       : "";
@@ -184,7 +186,7 @@ function machineEvidence(candidate) {
         <p>该候选尚未经过大模型高清人工式复核，不用 Rule 或 Agent 结果冒充建议。</p>`;
     return `<section class="machine-evidence">
       <div class="evidence-column rule-evidence">
-        <div class="evidence-title"><h4>Rule 判分</h4><span>第 ${candidate.rule_rank}/7 名</span></div>
+        <div class="evidence-title"><h4>Rule 判分</h4><span>第 ${candidate.rule_rank}/${denominator} 名</span></div>
         <p class="evidence-score"><b>${ruleScore}</b> / 100 · 等级 ${escapeHtml(candidate.machine_grade)}</p>
         <p>${escapeHtml(candidate.rule_reason)}</p>
       </div>
@@ -215,8 +217,8 @@ function candidateCard(candidate) {
     return `<article class="candidate-card unavailable">
       <div class="candidate-header"><div><h3>${escapeHtml(candidate.title)}</h3>
       <p class="candidate-meta">视觉等级 N/A</p></div></div>
-      <div class="unavailable-panel"><div><b>没有AIGC图片</b><p>${escapeHtml(candidate.status_text)}</p>
-      <p>这是API技术失败，不按图像质量判C。</p></div></div></article>`;
+      <div class="unavailable-panel"><div><b>该路线没有可评图片</b><p>${escapeHtml(candidate.status_text)}</p>
+      <p>未运行或技术失败不等同于图像质量 C/D，不纳入人工评分。</p></div></div></article>`;
   }
   const draft = state.draft[candidate.route];
   const badges = [
@@ -264,10 +266,8 @@ function render() {
     document.title = `${versionText} · 人工评审`;
     el("release-version").textContent = versionText;
   }
-  el("mode-description").textContent = state.mode === "all60"
-    ? "完整60张：逐张校对七种候选，共420张；同时核对Rule与Agent判分。"
-    : "重点20张：分别评价Rule、Agent和成功回图的AIGC。";
-  el("candidate-heading").textContent = state.mode === "all60" ? "全部七种候选" : "Rule / Agent / AIGC";
+  el("mode-description").textContent = state.workspace.mode_description || "逐张校对候选图片与机器依据。";
+  el("candidate-heading").textContent = state.workspace.candidate_heading || "全部候选";
   el("task-position").textContent = `任务 ${state.index + 1} / ${state.workspace.task_count}`;
   el("task-title").textContent = task.task_id;
   el("task-meta").textContent = `${task.scene_category} · ${task.split}`;
@@ -355,9 +355,30 @@ function navigate(index) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-document.querySelectorAll(".mode-button").forEach((button) => {
-  button.addEventListener("click", () => loadMode(button.dataset.mode));
-});
+function renderModes(modes) {
+  el("mode-switch").innerHTML = modes.map((mode, index) =>
+    `<button class="mode-button ${index === 0 ? "active" : ""}" data-mode="${escapeHtml(mode.id)}" type="button">
+      <strong>${escapeHtml(mode.label)}</strong><span>${escapeHtml(mode.detail || "")}</span>
+    </button>`
+  ).join("");
+  document.querySelectorAll(".mode-button").forEach((button) => {
+    button.addEventListener("click", () => loadMode(button.dataset.mode));
+  });
+}
+
+async function start() {
+  try {
+    state.ready = await api("/health/ready");
+    const modes = state.ready.modes || [];
+    if (!modes.length) throw new Error("评审工作区没有可用模式");
+    renderModes(modes);
+    await loadMode(modes[0].id);
+  } catch (error) {
+    el("loading").classList.add("hidden");
+    el("error").textContent = `无法启动评审：${error.message}`;
+    el("error").classList.remove("hidden");
+  }
+}
 el("task-select").addEventListener("change", (event) => navigate(Number(event.target.value)));
 el("previous").addEventListener("click", () => navigate(state.index - 1));
 el("next").addEventListener("click", () => navigate(state.index + 1));
@@ -375,7 +396,7 @@ el("reload").addEventListener("click", () => {
     return;
   }
   state.reviewerId = reviewer;
-  localStorage.setItem("movie60-reviewer-id", reviewer);
+  localStorage.setItem("retarget-reviewer-id", reviewer);
   loadMode(state.mode, true);
 });
 
@@ -385,4 +406,4 @@ window.addEventListener("beforeunload", (event) => {
   event.preventDefault();
   event.returnValue = "";
 });
-loadMode("all60");
+start();

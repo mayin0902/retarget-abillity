@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 - 2026-08-21
+
+- Add one unified Movie60/Run/imported-case review UI and non-mutating human-review sidecars.
+- Add `run image`, `run batch`, current Strategy resolution and arbitrary `WIDTHxHEIGHT` targets.
+- Add a repository-local Windows Bootstrap, `doctor`, one double-click review launcher and current
+  Movie60 Release materialization.
+- Keep Rule-only as the safe default; Agent requires an explicit private runtime Profile and AIGC
+  remains disabled in the ordinary workflow.
+- Add a Simplified-Chinese selector Skill with separately versioned case knowledge for the next
+  Strategy while preserving immutable `movie60@3.3.0`.
+- Replace duplicated handoff/process documents with four current developer-facing guides; older
+  evidence remains available from Git history and published Releases.
+
 ## 0.5.0 - 2026-08-21
 
 - Add immutable Movie60 v3, v3.1 and v3.2 scoring, Prompt, Skill and override bundles while

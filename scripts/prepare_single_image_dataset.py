@@ -42,7 +42,9 @@ def materialize_single_image_dataset(
     *,
     source_id: str,
     run_id: str,
-    target_size: int = 1536,
+    target_size: int | None = None,
+    target_width: int | None = None,
+    target_height: int | None = None,
     split: str = "calibration",
     scene_category: str = "movie_poster",
     output_root: str = "runs",
@@ -57,8 +59,14 @@ def materialize_single_image_dataset(
     validate_id(run_id)
     if split not in {"calibration", "validation", "test", "smoke"}:
         raise ValueError("split must be calibration, validation, test, or smoke")
-    if target_size <= 0:
-        raise ValueError("target_size must be positive")
+    if target_size is not None:
+        if target_width is not None or target_height is not None:
+            raise ValueError("target_size cannot be combined with target_width/target_height")
+        target_width = target_height = target_size
+    target_width = 1536 if target_width is None else target_width
+    target_height = 1536 if target_height is None else target_height
+    if target_width <= 0 or target_height <= 0:
+        raise ValueError("target width and height must be positive")
     if not scene_category.strip():
         raise ValueError("scene_category must not be empty")
 
@@ -85,7 +93,11 @@ def materialize_single_image_dataset(
     frozen_source = images / local_filename
     shutil.copy2(source, frozen_source)
     source_sha256 = sha256_file(frozen_source)
-    target_id = f"square-{target_size}"
+    target_id = (
+        f"square-{target_width}"
+        if target_width == target_height
+        else f"target-{target_width}x{target_height}"
+    )
     task_id = f"{source_id}__{target_id}"
     dataset_id = f"single-{source_id}"
 
@@ -96,7 +108,7 @@ def materialize_single_image_dataset(
         "description": "One local image for a reproducible retarget-engine walkthrough.",
         "expected_source_count": 1,
         "expected_scene_counts": {scene_category: 1},
-        "evaluation_canvas": f"{target_size}x{target_size}",
+        "evaluation_canvas": f"{target_width}x{target_height}",
         "generation_originals_may_be_retained_at_2k": True,
         "silent_upsampling_forbidden": True,
     }
@@ -131,8 +143,8 @@ def materialize_single_image_dataset(
         [
             {
                 "target_id": target_id,
-                "width": target_size,
-                "height": target_size,
+                "width": target_width,
+                "height": target_height,
                 "format": "png",
             }
         ],
@@ -157,7 +169,7 @@ def materialize_single_image_dataset(
         "run_id": run_id,
         "seed": 20260819,
         "device": "cpu",
-        "method_profile": "cn_square_v2",
+        "method_profile": "retarget_default_v1",
         "methods": [
             "direct_warp",
             "crop",
@@ -250,6 +262,8 @@ def main() -> None:
     parser.add_argument("--source-id", default="demo_poster")
     parser.add_argument("--run-id", default="single-image-square-v1")
     parser.add_argument("--target-size", type=int, default=1536)
+    parser.add_argument("--target-width", type=int)
+    parser.add_argument("--target-height", type=int)
     parser.add_argument(
         "--split",
         choices=("calibration", "validation", "test", "smoke"),
@@ -263,7 +277,13 @@ def main() -> None:
         args.output_dir,
         source_id=args.source_id,
         run_id=args.run_id,
-        target_size=args.target_size,
+        target_size=(
+            args.target_size
+            if args.target_width is None and args.target_height is None
+            else None
+        ),
+        target_width=args.target_width,
+        target_height=args.target_height,
         split=args.split,
         scene_category=args.scene_category,
         output_root=args.output_root,
