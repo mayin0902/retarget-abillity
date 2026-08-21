@@ -32,6 +32,7 @@ METHOD_PROFILES = {
     "cn_square_v1": CN_SQUARE_METHODS,
     "cn_square_v2": CN_SQUARE_SEVEN_METHODS,
     "legacy_four_v1": LEGACY_FOUR_METHODS,
+    "retarget_default_v1": CN_SQUARE_SEVEN_METHODS,
 }
 
 
@@ -74,7 +75,11 @@ class RunConfig(BaseModel):
     seed: int = 20260810
     device: Literal["cpu"] = "cpu"
     method_profile: Literal[
-        "cn_square_v1", "cn_square_v2", "legacy_four_v1", "custom"
+        "cn_square_v1",
+        "cn_square_v2",
+        "legacy_four_v1",
+        "retarget_default_v1",
+        "custom",
     ] = "cn_square_v1"
     methods: tuple[str, ...] = CN_SQUARE_METHODS
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)

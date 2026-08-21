@@ -28,7 +28,7 @@ def test_materialize_single_image_dataset_is_valid_and_runnable(tmp_path: Path) 
     assert validation.tasks[0].task_id == "poster_001__square-1536"
     assert config.dataset_root == output.resolve().as_posix()
     assert config.run_id == "single-poster-v1"
-    assert config.method_profile == "cn_square_v2"
+    assert config.method_profile == "retarget_default_v1"
     assert result["task_id"] == "poster_001__square-1536"
 
 

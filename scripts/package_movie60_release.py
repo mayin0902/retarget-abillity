@@ -113,20 +113,12 @@ def _collect(
         _add_tree(core, reports, Path("reports"), "human-review-reports")
 
     documentation = {
-        repository / "docs" / "DATA_AND_RESULTS.md": Path("documentation/DATA_AND_RESULTS.md"),
-        repository / "docs" / "REVIEW_GUIDE.md": Path("documentation/REVIEW_GUIDE.md"),
-        repository / "docs" / "HANDOFF_DETAILED_GUIDE.md": Path(
-            "documentation/HANDOFF_DETAILED_GUIDE.md"
+        repository / "docs" / "QUICKSTART.md": Path("documentation/QUICKSTART.md"),
+        repository / "docs" / "REVIEW_AND_SCORING.md": Path(
+            "documentation/REVIEW_AND_SCORING.md"
         ),
-        repository / "docs" / "PLUGIN_STRATEGY_GUIDE.md": Path(
-            "documentation/PLUGIN_STRATEGY_GUIDE.md"
-        ),
-        repository / "docs" / "MOVIE60_V3_RULE_AGENT_GUIDE.md": Path(
-            "documentation/MOVIE60_V3_RULE_AGENT_GUIDE.md"
-        ),
-        repository / "docs" / "reports" / "MOVIE60_STRICT_END_TO_END_REPORT.md": Path(
-            "documentation/MOVIE60_TECHNICAL_REPORT.md"
-        ),
+        repository / "docs" / "ARCHITECTURE.md": Path("documentation/ARCHITECTURE.md"),
+        repository / "docs" / "ADVANCED.md": Path("documentation/ADVANCED.md"),
         repository / "datasets" / "movie_visual_60_v1" / "README.md": Path(
             "documentation/DATASET_CONTRACT.md"
         ),

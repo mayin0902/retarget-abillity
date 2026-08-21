@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import threading
+import webbrowser
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -70,11 +73,11 @@ def _image_review_backend(
 def score_reference(
     source: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
     candidate: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
-    output_dir: Annotated[Path, typer.Option("--output-dir")],
+    output_dir: Annotated[Path | None, typer.Option("--output-dir")] = None,
     strategy: Annotated[
-        Path,
+        Path | None,
         typer.Option("--strategy", exists=True, dir_okay=False),
-    ] = Path("strategies/movie60/v3_3/bundle.yaml"),
+    ] = None,
     agent_backend_url: Annotated[
         str | None, typer.Option("--agent-backend-url")
     ] = None,
@@ -84,9 +87,17 @@ def score_reference(
     ] = None,
 ) -> None:
     """Compare one candidate with its source and emit JSON/Markdown/overlay."""
+    from .defaults import current_strategy_path, project_root
     from .image_scoring import score_image
     from .strategy import load_strategy_bundle
 
+    strategy = strategy or current_strategy_path()
+    output_dir = output_dir or (
+        project_root()
+        / "workspace"
+        / "scores"
+        / f"reference-{datetime.now(UTC):%Y%m%d-%H%M%S-%f}"
+    )
     loaded = load_strategy_bundle(strategy)
     result = score_image(
         source_path=source,
@@ -103,11 +114,11 @@ def score_reference(
 @score_app.command("standalone")
 def score_standalone(
     candidate: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
-    output_dir: Annotated[Path, typer.Option("--output-dir")],
+    output_dir: Annotated[Path | None, typer.Option("--output-dir")] = None,
     strategy: Annotated[
-        Path,
+        Path | None,
         typer.Option("--strategy", exists=True, dir_okay=False),
-    ] = Path("strategies/movie60/v3_3/bundle.yaml"),
+    ] = None,
     agent_backend_url: Annotated[
         str | None, typer.Option("--agent-backend-url")
     ] = None,
@@ -117,9 +128,17 @@ def score_standalone(
     ] = None,
 ) -> None:
     """Inspect one candidate without making source-preservation or grade claims."""
+    from .defaults import current_strategy_path, project_root
     from .image_scoring import score_image
     from .strategy import load_strategy_bundle
 
+    strategy = strategy or current_strategy_path()
+    output_dir = output_dir or (
+        project_root()
+        / "workspace"
+        / "scores"
+        / f"standalone-{datetime.now(UTC):%Y%m%d-%H%M%S-%f}"
+    )
     loaded = load_strategy_bundle(strategy)
     result = score_image(
         candidate_path=candidate,
@@ -138,14 +157,26 @@ def version() -> None:
     typer.echo(__version__)
 
 
+@app.command()
+def doctor() -> None:
+    """Check the local environment and print one READY / NOT READY result."""
+    from .doctor import run_doctor
+
+    result = run_doctor()
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result["ready"]:
+        raise typer.Exit(code=2)
+
+
 @strategy_app.command("show")
 def strategy_show(
-    bundle: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    bundle: Annotated[Path | None, typer.Argument(exists=True, dir_okay=False)] = None,
 ) -> None:
     """Validate and show one immutable strategy bundle and its hashes."""
+    from .defaults import current_strategy_path
     from .strategy import load_strategy_bundle
 
-    loaded = load_strategy_bundle(bundle)
+    loaded = load_strategy_bundle(bundle or current_strategy_path())
     typer.echo(
         json.dumps(
             {
@@ -201,6 +232,48 @@ def run_generate(
 
     result = RetargetApplicationService.default().generate_from_config(config_path)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@run_app.command("image")
+def run_image_command(
+    input_image: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    target: Annotated[str, typer.Option("--target")] = "1536x1536",
+    agent_profile: Annotated[
+        Path | None,
+        typer.Option("--agent-profile", exists=True, dir_okay=False),
+    ] = None,
+) -> None:
+    """Run current Rule for one image; optionally run Agent with a private profile."""
+    from .simple_workflow import run_image
+
+    typer.echo(
+        json.dumps(
+            run_image(input_image, target=target, agent_profile=agent_profile),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@run_app.command("batch")
+def run_batch_command(
+    input_dir: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    target: Annotated[str, typer.Option("--target")] = "1536x1536",
+    agent_profile: Annotated[
+        Path | None,
+        typer.Option("--agent-profile", exists=True, dir_okay=False),
+    ] = None,
+) -> None:
+    """Run current Rule for a folder; optionally run Agent with a private profile."""
+    from .simple_workflow import run_batch
+
+    typer.echo(
+        json.dumps(
+            run_batch(input_dir, target=target, agent_profile=agent_profile),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 @app.command("report")
@@ -423,4 +496,103 @@ def review_web(
         host=host,
         port=port,
         agent_run_id=agent_run_id,
+    )
+
+
+def _launch_unified_review(
+    workspace: Path,
+    *,
+    host: str,
+    port: int,
+    evaluation_id: str | None,
+    agent_run_id: str | None,
+    open_browser: bool,
+) -> None:
+    import uvicorn
+
+    from .unified_review_app import create_unified_review_app
+
+    url = f"http://{host}:{port}/"
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        typer.echo("Warning: non-loopback binding exposes this unauthenticated local review tool.")
+    if open_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    typer.echo(f"Review website: {url}")
+    typer.echo(f"Workspace: {workspace.resolve()}")
+    uvicorn.run(
+        create_unified_review_app(
+            workspace,
+            evaluation_id=evaluation_id,
+            agent_run_id=agent_run_id,
+        ),
+        host=host,
+        port=port,
+        log_level="info",
+    )
+
+
+@review_app.command("open")
+def review_open(
+    workspace: Annotated[Path | None, typer.Argument(exists=True, file_okay=False)] = None,
+    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", min=1, max=65535)] = 8765,
+    evaluation_id: Annotated[str | None, typer.Option("--evaluation-id")] = None,
+    agent_run_id: Annotated[str | None, typer.Option("--agent-run-id")] = None,
+    open_browser: Annotated[bool, typer.Option("--open-browser/--no-open-browser")] = True,
+) -> None:
+    """Open Movie60, a standard Run or an imported case in the same review UI."""
+    from .defaults import load_default_config
+    from .review_workspace import latest_completed_run
+
+    if workspace is None:
+        root, defaults = load_default_config()
+        movie60 = root / str(defaults["review"]["movie60_workspace"])
+        if movie60.is_dir():
+            workspace = movie60
+        else:
+            workspace = latest_completed_run(root / str(defaults["review"]["runs_root"]))
+    _launch_unified_review(
+        workspace,
+        host=host,
+        port=port,
+        evaluation_id=evaluation_id,
+        agent_run_id=agent_run_id,
+        open_browser=open_browser,
+    )
+
+
+@review_app.command("latest")
+def review_latest(
+    runs_root: Annotated[
+        Path,
+        typer.Option("--runs-root", exists=True, file_okay=False),
+    ] = Path("runs"),
+    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", min=1, max=65535)] = 8765,
+) -> None:
+    """Open the most recently completed standard Run."""
+    from .review_workspace import latest_completed_run
+
+    _launch_unified_review(
+        latest_completed_run(runs_root),
+        host=host,
+        port=port,
+        evaluation_id=None,
+        agent_run_id=None,
+        open_browser=True,
+    )
+
+
+@review_app.command("import")
+def review_import(
+    source_dir: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
+    output_dir: Annotated[Path | None, typer.Option("--output-dir")] = None,
+) -> None:
+    """Convert source.* + candidates/ into a standard local review workspace."""
+    from .defaults import project_root
+    from .review_workspace import import_review_case
+
+    target = output_dir or project_root() / "local_data" / "reviews" / source_dir.name
+    typer.echo(
+        json.dumps(import_review_case(source_dir, target), ensure_ascii=False, indent=2)
     )

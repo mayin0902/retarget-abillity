@@ -3,6 +3,7 @@ param(
     [ValidateSet('3.11', '3.12', '3.13')]
     [string]$PythonVersion = '3.12',
     [string]$PythonExecutable,
+    [switch]$SkipCompanyModels,
     [switch]$WithMovie60Release
 )
 
@@ -24,10 +25,6 @@ function Invoke-Checked {
     }
 }
 
-if (Test-Path -LiteralPath '.venv') {
-    throw '.venv already exists. Refusing to overwrite an environment.'
-}
-
 $Required = @(
     'pyproject.toml',
     'requirements\constraints-py311-313.txt',
@@ -42,7 +39,15 @@ if ($Missing) {
     throw "Repository is incomplete: $($Missing -join ', ')"
 }
 
-if ($PythonExecutable) {
+$Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+$Cli = Join-Path $RepoRoot '.venv\Scripts\retarget-engine.exe'
+
+if (Test-Path -LiteralPath '.venv') {
+    if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
+        throw '.venv exists but has no Windows Python. Move it aside, then rerun Bootstrap.'
+    }
+    Write-Host 'Reusing the existing repository-local .venv.' -ForegroundColor Cyan
+} elseif ($PythonExecutable) {
     if (-not (Test-Path -LiteralPath $PythonExecutable -PathType Leaf)) {
         throw "Python executable does not exist: $PythonExecutable"
     }
@@ -62,19 +67,20 @@ if ($PythonExecutable) {
     }
     Invoke-Checked 'py' @("-$PythonVersion", '-m', 'venv', '.venv') 'Virtual environment creation'
 }
-$Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
-$Cli = Join-Path $RepoRoot '.venv\Scripts\retarget-engine.exe'
 
 Invoke-Checked $Python @('-m', 'pip', 'install', '--upgrade', 'pip==25.2', 'setuptools==80.9.0', 'wheel==0.45.1') 'Build-tool installation'
 Invoke-Checked $Python @('-m', 'pip', 'install', '-c', 'requirements\constraints-py311-313.txt', '-e', '.[dev]') 'Project installation'
-Invoke-Checked $Python @('-m', 'pip', 'install', '-r', 'requirements\company-models-windows.txt') 'Company-model runtime installation'
-Invoke-Checked $Python @('scripts\materialize_analyzer_models.py') 'Analyzer model materialization'
-Invoke-Checked $Python @('scripts\materialize_company_models.py') 'Company model materialization'
+if (-not $SkipCompanyModels) {
+    Invoke-Checked $Python @('-m', 'pip', 'install', '-r', 'requirements\company-models-windows.txt') 'Company-model runtime installation'
+    Invoke-Checked $Python @('scripts\materialize_analyzer_models.py') 'Analyzer model materialization'
+    Invoke-Checked $Python @('scripts\materialize_company_models.py') 'Company model materialization'
+}
 Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v1\bundle.yaml') 'v1 strategy validation'
 Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v2\bundle.yaml') 'v2 strategy validation'
 Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v3_2_2\bundle.yaml') 'v3.2.2 strategy validation'
 Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v3_3\bundle.yaml') 'v3.3 strategy validation'
 Invoke-Checked $Python @('-m', 'pytest', '-q', 'tests\test_strategy.py', 'tests\test_single_image_workflow_tools.py') 'Bootstrap smoke tests'
+Invoke-Checked $Cli @('doctor') 'Environment readiness check'
 
 if ($WithMovie60Release) {
     Invoke-Checked $Python @('scripts\materialize_movie60_release.py') 'Movie60 Release materialization'
@@ -83,4 +89,4 @@ if ($WithMovie60Release) {
 Write-Host ''
 Write-Host 'Bootstrap completed.' -ForegroundColor Green
 Write-Host "Python: $Python"
-Write-Host 'Next: docs\README.md'
+Write-Host 'Next: double-click START_REVIEW.bat, or read docs\QUICKSTART.md.'

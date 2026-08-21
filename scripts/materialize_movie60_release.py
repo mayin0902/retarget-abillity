@@ -151,12 +151,12 @@ def main() -> None:
         description="Download, hash-check and safely materialize the private Movie60 release."
     )
     parser.add_argument("--repo", default="mayin0902/retarget-abillity")
-    parser.add_argument("--tag", default="movie60-review-v1")
-    parser.add_argument("--release-version", default="v1")
+    parser.add_argument("--tag", default="movie60-review-v3")
+    parser.add_argument("--release-version", default="v3")
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("local_data/movie60-review-v1"),
+        default=Path("local_data/movie60-review-current"),
     )
     parser.add_argument(
         "--asset-dir",

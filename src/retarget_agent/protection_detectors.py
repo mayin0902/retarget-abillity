@@ -595,7 +595,7 @@ class PaddleOcrV6SmallDetector:
         except ImportError as error:
             raise RuntimeError(
                 "company_cpu_v2 requires the optional company-model dependencies; "
-                "follow docs/runbooks/WINDOWS_INSTALL.md"
+                "follow docs/QUICKSTART.md"
             ) from error
         self.pipeline = PaddleOCR(
             text_detection_model_name=self.detection_model_name,
@@ -675,7 +675,7 @@ class DFineNanoDetector:
         except ImportError as error:
             raise RuntimeError(
                 "company_cpu_v2 requires the optional company-model dependencies; "
-                "follow docs/runbooks/WINDOWS_INSTALL.md"
+                "follow docs/QUICKSTART.md"
             ) from error
         cache_dir = Path(config.model_root).resolve() / "company_cpu_v2" / "huggingface"
         kwargs = {

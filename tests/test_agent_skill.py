@@ -34,3 +34,13 @@ def test_skill_schema_rejects_unknown_fields(tmp_path: Path) -> None:
     path.write_text("skill_id: x\nversion: v1\nunknown: true\n", encoding="utf-8")
     with pytest.raises(ValueError):
         load_agent_skill(path)
+
+
+def test_v8_skill_loads_separate_chinese_knowledge() -> None:
+    loaded = load_agent_skill(ROOT / "agent_skills/qwen4-selector/v8/skill.yaml")
+    rendered = loaded.skill.render()
+
+    assert loaded.skill.version == "2.4.0"
+    assert len(loaded.skill.case_knowledge) == 8
+    assert "目标比例变化本身不是缺陷" in rendered
+    assert len(loaded.source_sha256) == 64
