@@ -41,6 +41,8 @@ def test_v8_skill_loads_separate_chinese_knowledge() -> None:
     rendered = loaded.skill.render()
 
     assert loaded.skill.version == "2.4.0"
-    assert len(loaded.skill.case_knowledge) == 8
+    assert len(loaded.skill.case_knowledge) == 12
+    assert len(loaded.source_files) == 2
+    assert set(loaded.file_hashes) == {"skill.yaml", "agent-knowledge.yaml"}
     assert "目标比例变化本身不是缺陷" in rendered
     assert len(loaded.source_sha256) == 64

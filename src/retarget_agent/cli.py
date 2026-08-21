@@ -485,17 +485,15 @@ def review_web(
         ),
     ] = None,
 ) -> None:
-    """Launch the FastAPI review website against a frozen run."""
-    from .service import RetargetApplicationService
-
-    typer.echo(f"Review website: http://{host}:{port}")
-    if host not in {"127.0.0.1", "localhost", "::1"}:
-        typer.echo("Warning: non-loopback binding exposes this unauthenticated local review tool.")
-    RetargetApplicationService.default().launch_review_web(
+    """Deprecated alias for ``review open RUN_DIR``."""
+    typer.echo("Deprecated: use 'retarget-engine review open RUN_DIR'.")
+    _launch_unified_review(
         run_dir,
         host=host,
         port=port,
+        evaluation_id=None,
         agent_run_id=agent_run_id,
+        open_browser=True,
     )
 
 
@@ -546,11 +544,16 @@ def review_open(
 
     if workspace is None:
         root, defaults = load_default_config()
+        runs_root = root / str(defaults["review"]["runs_root"])
         movie60 = root / str(defaults["review"]["movie60_workspace"])
-        if movie60.is_dir():
+        try:
+            workspace = latest_completed_run(runs_root)
+        except FileNotFoundError:
+            if not movie60.is_dir():
+                raise FileNotFoundError(
+                    "no completed Run and no materialized Movie60 review workspace"
+                ) from None
             workspace = movie60
-        else:
-            workspace = latest_completed_run(root / str(defaults["review"]["runs_root"]))
     _launch_unified_review(
         workspace,
         host=host,

@@ -6,7 +6,7 @@
 ## 第一次使用
 
 安装前先向项目负责人取得公司 pip 镜像地址，并按
-[QUICKSTART](docs/QUICKSTART.md#0-填写公司-pip-镜像)填写；仓库不会保存公司凭据。
+[QUICKSTART](docs/QUICKSTART.md#0-先确认公司-pip-镜像)填写；仓库不会保存公司凭据。
 
 ```powershell
 git clone <private-repository-url> retarget-abillity
@@ -15,7 +15,8 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1 -PythonVe
 .\.venv\Scripts\retarget-engine.exe doctor
 ```
 
-安装只做一次。以后双击 `START_REVIEW.bat` 即可打开当前 Movie60 或最近完成的 Run。
+安装只做一次。以后双击 `START_REVIEW.bat` 即可优先打开最近完成的 Run；没有 Run 时回退
+到当前 Movie60。
 
 ## 最常用命令
 

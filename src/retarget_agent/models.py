@@ -527,6 +527,33 @@ class EvaluationManifest(FrozenModel):
     _evaluator_id = field_validator("evaluator_id")(validate_id)
 
 
+class RuleDecisionRecord(FrozenModel):
+    """Frozen Rule ranking derived from one immutable Evaluation."""
+
+    schema_version: str = "1.0"
+    decision_id: str
+    source_run_id: str
+    evaluation_id: str
+    task_id: str
+    selector_id: str
+    selector_version: str
+    strategy_id: str | None = None
+    strategy_version: str | None = None
+    strategy_sha256: str | None = None
+    candidate_ranking: tuple[str, ...]
+    selected_candidate_id: str | None
+    failed_candidate_ids: tuple[str, ...] = ()
+    reason_codes: tuple[str, ...] = ()
+    decision_source: Literal["evaluation", "legacy_reconstructed"] = "evaluation"
+    created_at: datetime = Field(default_factory=utc_now)
+
+    _decision_id = field_validator("decision_id")(validate_id)
+    _source_run_id = field_validator("source_run_id")(validate_id)
+    _evaluation_id = field_validator("evaluation_id")(validate_id)
+    _task_id = field_validator("task_id")(validate_id)
+    _selector_id = field_validator("selector_id")(validate_id)
+
+
 # Future-boundary records. They deliberately carry no provider-specific fields.
 class ProtectionDecision(FrozenModel):
     decision_id: str

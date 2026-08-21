@@ -13,7 +13,7 @@ from retarget_agent.review_localization import (
     localize_strict_review,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKSPACE = REPO_ROOT / "deliverables" / "movie60-review"
 RUN = REPO_ROOT / "runs" / "movie60-square-v1-20260818"
 EVALUATION = RUN / "evaluations" / "movie60-auto-strict-v1p2-20260818" / "metrics"

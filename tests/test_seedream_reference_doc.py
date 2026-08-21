@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.run_seedream_from_reference_doc import _runtime_values
+from experiments.movie60.scripts.run_seedream_from_reference_doc import _runtime_values
 
 
 def test_runtime_values_extract_one_consistent_private_contract(tmp_path: Path) -> None:

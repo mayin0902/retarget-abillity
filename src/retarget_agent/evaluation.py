@@ -806,6 +806,9 @@ def evaluate_run(
         candidate_ids=tuple(evaluated_candidate_ids),
         metric_bundle_ids=tuple(metric_ids),
     )
+    from .rule_selection import materialize_rule_decisions
+
+    materialize_rule_decisions(run_dir, manifest, strategy_bundle)
     store.write_json(f"{base}/summary.json", _summary(all_records, elapsed))
     store.write_json(f"{base}/evaluation.json", manifest)
     return manifest

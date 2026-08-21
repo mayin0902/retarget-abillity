@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0 - 2026-08-21
+
+- Freeze one authoritative Rule decision per Task during Evaluation; Agent Replay, result export
+  and the unified UI consume that same complete ranking instead of rebuilding it from scores.
+- Make the seven-method `retarget_default_v1` profile the real RunConfig and developer-workflow
+  default, with one shared parameter source and permanent five-aspect generation tests.
+- Show failed methods in the Run review denominator with N/A, failure type and summary while
+  exempting unavailable images from human grading.
+- Load, hash and snapshot separate Agent Knowledge through StrategyBundle, and expand the Chinese
+  v8 knowledge to all twelve general visual precedents without changing frozen 3.3 Agent results.
+- Export `result.png/result.json` for one-image workflows and per-Task results for batches.
+- Expand the four handoff documents with Windows bootstrap, algorithms, formulas, Rule/Agent
+  evidence, review operations, plugin iteration and rerun guidance.
+
 ## 0.6.0 - 2026-08-21
 
 - Add one unified Movie60/Run/imported-case review UI and non-mutating human-review sidecars.

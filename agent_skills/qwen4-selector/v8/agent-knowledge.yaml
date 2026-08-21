@@ -37,3 +37,20 @@ cases:
     situation: 裁剪移除次要细节但得到均衡自然画面，另一高相似候选有明显拉伸。
     expected_judgement: 优先自然裁剪。
     rationale: 人类视觉偏好不等于像素相似度最大。
+  - case_id: combined_medium_defects
+    situation: 单项缺陷都不致命，但主脸、关键道具和主标题分别存在可见损伤。
+    expected_judgement: 组合后已需要返修时给 C。
+    rationale: 多个中等缺陷叠加后会跨过可直接发布边界。
+  - case_id: identity_count_disagreement
+    situation: 检测器数量保持不变，但主人物身份、角色关系或身体比例发生明显变化。
+    expected_judgement: 按严重程度给 C 或 D，不受数量指标限制。
+    rationale: 数量一致不能证明语义与人物身份一致。
+  - case_id: typography_ocr_disagreement
+    situation: OCR 字符相似，但主标题存在断笔、重复条带或明显字形扭曲。
+    expected_judgement: 设计人员需要返修时给 C。
+    rationale: OCR 语义召回不能衡量字体的视觉完整性。
+    counterexample: 艺术字造成 OCR 差异，但高清图中文字仍连贯且可读。
+  - case_id: two_challenger_diversity
+    situation: Rule Top1 在软指标上占优，两个较低排名方法分别体现裁切与形变的不同取舍。
+    expected_judgement: 选择视觉最强且方法不同的两个挑战候选做独立高清配对复核。
+    rationale: 只看一个挑战候选可能漏掉更符合人类偏好的取舍。

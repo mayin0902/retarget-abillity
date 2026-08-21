@@ -61,7 +61,7 @@ def _review_run(tmp_path: Path) -> Path:
 
 def _submission(workspace: dict[str, object]) -> dict[str, object]:
     task = workspace["tasks"][0]
-    grades = ["A", "B", "C", "D", "Skip"]
+    grades = ["A", "B", "C", "D", "Skip", "A", "B"]
     return {
         "reviewer_id": "web-reviewer",
         "task_id": task["task_id"],
@@ -146,7 +146,7 @@ def test_web_review_save_resume_and_domain_validation(tmp_path: Path) -> None:
     submission = _submission(workspace)
     saved = client.post("/v1/reviews", json=submission)
     assert saved.status_code == 200
-    assert saved.json()["saved_count"] == 5
+    assert saved.json()["saved_count"] == 7
     resumed = client.get("/v1/review-workspace", params={"reviewer_id": "web-reviewer"}).json()
     assert resumed["completed_task_count"] == 1
     assert [item["review"]["grade"] for item in resumed["tasks"][0]["candidates"]] == [
@@ -155,6 +155,8 @@ def test_web_review_save_resume_and_domain_validation(tmp_path: Path) -> None:
         "C",
         "D",
         "Skip",
+        "A",
+        "B",
     ]
 
     invalid = _submission(workspace)

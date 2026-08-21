@@ -17,7 +17,7 @@ from typing import Literal
 import yaml
 from pydantic import Field, field_validator, model_validator
 
-from .agent_skill import AgentSkill
+from .agent_skill import AgentSkill, load_agent_skill
 from .hashing import sha256_file, sha256_json
 from .models import FrozenModel, validate_id
 from .prompting import LoadedPromptBundle, load_prompt_bundle
@@ -327,6 +327,7 @@ class LoadedStrategyBundle:
     source_files: tuple[Path, ...]
     file_hashes: dict[str, str]
     source_sha256: str
+    agent_skill_sha256: str
 
     def snapshot_to(self, destination: Path) -> Path:
         """Copy the exact bundle inputs into a new artifact directory."""
@@ -394,6 +395,12 @@ def load_strategy_bundle(path: Path) -> LoadedStrategyBundle:
     selection_path = referenced(bundle.selection_policy)
     override_path = referenced(bundle.override_policy)
     skill_path = referenced(bundle.agent_skill)
+    loaded_skill = load_agent_skill(skill_path)
+    for item in loaded_skill.source_files:
+        try:
+            item.relative_to(root)
+        except ValueError as error:
+            raise ValueError("Agent skill knowledge escapes strategy directory") from error
     prompts = None
     prompt_files: tuple[Path, ...] = ()
     if bundle.prompt_bundle is not None:
@@ -402,7 +409,14 @@ def load_strategy_bundle(path: Path) -> LoadedStrategyBundle:
         prompt_files = prompts.source_files
     source_files = tuple(
         dict.fromkeys(
-            (resolved, scoring_path, selection_path, override_path, skill_path, *prompt_files)
+            (
+                resolved,
+                scoring_path,
+                selection_path,
+                override_path,
+                *loaded_skill.source_files,
+                *prompt_files,
+            )
         )
     )
     relative_hashes = {
@@ -413,12 +427,13 @@ def load_strategy_bundle(path: Path) -> LoadedStrategyBundle:
         scoring=ScoringPolicy.model_validate(_read_mapping(scoring_path)),
         selection=SelectionPolicy.model_validate(_read_mapping(selection_path)),
         override=OverridePolicy.model_validate(_read_mapping(override_path)),
-        agent_skill=AgentSkill.model_validate(_read_mapping(skill_path)),
+        agent_skill=loaded_skill.skill,
         prompts=prompts,
         root=root,
         source_files=source_files,
         file_hashes=relative_hashes,
         source_sha256=sha256_json(relative_hashes),
+        agent_skill_sha256=loaded_skill.source_sha256,
     )
 
 
