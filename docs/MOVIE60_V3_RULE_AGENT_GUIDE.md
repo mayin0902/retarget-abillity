@@ -9,8 +9,8 @@ v3 的目标不是让大模型替代 Rule，而是把两类能力拆开：
   这类机器指标看不见的问题；
 - Override 门禁把二者合并。证据不清、文字/主体计数倒退或语义矛盾时回退 Rule。
 
-当前活动版本是 `strategies/movie60/v3_2_2/`。v1、v2、v2.1、v3、v3.1、v3.2
-和 v3.2.1 都保留，不得原地修改。v3.2.2 中 Agent 保留高清语义审查能力，
+当前活动版本是 `strategies/movie60/v3_3/`。v1、v2、v2.1、v3、v3.1、v3.2、
+v3.2.1 和 v3.2.2 都保留，不得原地修改。v3.3 中 Agent 保留高清语义审查能力，
 但以 advisory-only 方式进入人工复核，不自动覆盖 Rule Top1。
 
 ```mermaid
@@ -43,14 +43,13 @@ Rule 的基础分可概括为：
 ```text
 Quality = 100 × (内容保真×内容权重 + 视觉完整×完整权重 + 构图×构图权重)
           ÷ 有效权重总和
-          + 场景/方法透明修正
-          + 已声明的软惩罚
+          + 已声明的检测回归罚分
 ```
 
 - 内容保真：主体特征、文字召回、人脸/人物/商品/Logo/对象保留；
 - 视觉完整：清晰度、边缘、色彩、结构线、变换安全；
 - 构图：保护区域是否贴边、视觉中心是否合理；
-- 透明修正：只允许按场景或方法配置，不能匹配 task ID 或文件名；
+- v3.3 不按场景名或方法名奖励分数；
 - 门禁：多个条件同时满足时把等级最高限制到 C/D，例如主要人物几乎消失。
 
 颜色、ORB、结构线或 OCR 的差异只能作为证据。重定向本来就会裁切或改变比例，所以单项
@@ -76,7 +75,7 @@ runs/<run>/evaluations/<evaluation>/strategy/       # 当次不可变策略快�
 3. 从完整 Agent 排名中取最多两名非 Rule challenger；
 4. Rule Top1 无条件进入高清整图 + 关键局部复核；
 5. 每名 challenger 也单独高清复核，再分别与 Rule Top1 配对；
-6. Agent 可建议升级或降级视觉等级，但 v3.2.2 不自动改选方法；
+6. Agent 可建议升级或降级视觉等级，但 v3.3 不自动改选方法；
 7. Rule 为 A/B 时，challenger 出现关键文字召回或人物/人脸/商品/Logo 数量下降，禁止覆盖；
 8. 证据冲突、置信度不足或看不清时保留 Rule，而不是编造缺陷。
 
@@ -105,10 +104,15 @@ runs/<run>/strict-reviews/<review-id>/decisions/
 - v3.2：以 C/D 召回为首要风险指标，补充组合门禁和更完整的视觉案例知识；
 - v3.2.1：实验性保留 Agent 选图，把最终等级切回 Rule metric；
 - v3.2.2：代理留出显示自动覆盖不稳定，部署冻结为 Rule 主决策、Agent advisory。
+- v3.3：删除场景/方法加分奖励，阈值改为 89/52/42；保留回归罚分和 C/D 门禁。
 
 标签是 420 条“人工粗审认可的大模型代理建议”，不是人工金标。先按场景冻结 45 个开发
 Task 和 15 个代理保留 Task；开发集做 5-fold 诊断，冻结候选路线后才读取保留集。详细结果见
 `docs/reviews/movie60-v3/`。
+
+当前另有 18 个 Task、126 个候选的真实人工评分。v3.3 阈值只在其中 84 条 development
+记录上选择，并在 42 条 proxy-holdout 人工记录上一次读出；详细区分见
+`RULE_V3_3_HUMAN_THRESHOLD_REPORT.md`。
 
 ## 5. 从已有 Run 重放 Rule
 
@@ -119,7 +123,7 @@ Task 和 15 个代理保留 Task；开发集做 5-fold 诊断，冻结候选路�
   <run-dir> `
   --source-evaluation-id <old-evaluation-id> `
   --evaluation-id <new-unique-id> `
-  --strategy strategies\movie60\v3_2_2\bundle.yaml
+  --strategy strategies\movie60\v3_3\bundle.yaml
 ```
 
 它会校验候选完整分母，为每个来源 Metric 保存 SHA-256，并把完整 StrategyBundle 快照写进
@@ -134,7 +138,7 @@ Task 和 15 个代理保留 Task；开发集做 5-fold 诊断，冻结候选路�
   <run-dir> --evaluation-id <evaluation-id> --phase development `
   --task-ids-file docs\reviews\movie60-v3\proxy-split-45dev-15holdout.json `
   --backend-url http://127.0.0.1:18101/v1 --model <内部部署名> `
-  --strategy strategies\movie60\v3_2_2\bundle.yaml `
+  --strategy strategies\movie60\v3_3\bundle.yaml `
   --agent-run-id <new-overview-id> --comparison-dir <rule-aware-overview-dir>
 ```
 
@@ -145,7 +149,7 @@ Task 和 15 个代理保留 Task；开发集做 5-fold 诊断，冻结候选路�
   <run-dir> --evaluation-id <evaluation-id> --phase development `
   --task-ids-file docs\reviews\movie60-v3\proxy-split-45dev-15holdout.json `
   --backend-url http://127.0.0.1:18101/v1 --model <内部部署名> `
-  --strategy strategies\movie60\v3_2_2\bundle.yaml `
+  --strategy strategies\movie60\v3_3\bundle.yaml `
   --overview-agent-run-id <overview-id> --review-run-id <new-review-id>
 ```
 

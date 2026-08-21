@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$InputImage,
     [string]$CaseId = 'handoff-demo',
-    [string]$Strategy = 'strategies\movie60\v3_2_2\bundle.yaml'
+    [string]$Strategy = 'strategies\movie60\v3_3\bundle.yaml'
 )
 
 $ErrorActionPreference = 'Stop'

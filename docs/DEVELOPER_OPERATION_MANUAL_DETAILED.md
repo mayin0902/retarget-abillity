@@ -28,16 +28,15 @@ Rule-only 的边界：
 ### 1.1 代码和 Release
 
 ```text
-GitHub main: PR #2 合并后的 e605eb4
-私有 Pre-release: movie60-review-v2
-当前部署 Strategy: movie60@3.2.2
-Strategy 入口: strategies/movie60/v3_2_2/bundle.yaml
+GitHub main: 以 clone 后 `git log -1 --oneline` 的当前提交为准
+私有 Pre-release: movie60-review-v3
+当前部署 Strategy: movie60@3.3.0
+Strategy 入口: strategies/movie60/v3_3/bundle.yaml
 ```
 
 ### 1.2 数据和评分不是同一个版本号
 
-当前图片数据集仍叫 `movie-visual-60-v1@1.0.0`。Release v2 只是打包版本。Release 的 `all60` 主表仍带旧机器评分；最新 v3.2.2 结果在
-`docs/reviews/movie60-v3/`。详细矩阵见
+当前图片数据集仍叫 `movie-visual-60-v1@1.0.0`。Release v3 是交付版本，其中 `all60` 主表使用 v3.3.0 Rule，并完整保留已有人工评分。详细矩阵见
 [当前数据、评分与 Agent 路线状态](reviews/movie60-v3/CURRENT_DATA_AND_ROUTE_STATUS.md)。
 
 原因：Dataset 决定输入像素，Run 决定候选像素，Strategy 决定评分，Release 决定交付内容。四层可独立升级，不能只看一个“v2”。
@@ -148,7 +147,7 @@ git remote -v
 git log -1 --oneline
 Test-Path pyproject.toml
 Test-Path scripts\bootstrap_windows.ps1
-Test-Path strategies\movie60\v3_2_2\bundle.yaml
+Test-Path strategies\movie60\v3_3\bundle.yaml
 ```
 
 预期：工作区无修改，remote 指向私有仓库，三个 `Test-Path` 均为 `True`。
@@ -260,12 +259,12 @@ py -3.12 -m venv .venv
 
 ```powershell
 .\.venv\Scripts\retarget-engine.exe strategy show `
-  strategies\movie60\v3_2_2\bundle.yaml
+  strategies\movie60\v3_3\bundle.yaml
 ```
 
 确认：
 
-- version=`3.2.2`；
+- version=`3.3.0`；
 - A_min=90、B_min=65、C_min=50；
 - detector=`company_cpu_v2`；
 - scorer=`human_aligned_proxy_v3`；
@@ -303,16 +302,15 @@ gh auth status
 ### 8.2 下载后看哪里
 
 ```text
-local_data/movie60-review-v2/
-├── all60/                 # 60 张、420 候选、旧主评分和人工表
+local_data/movie60-review-v3/
+├── all60/                 # 60 张、420 候选、当前评分和人工表
 ├── focus20/               # 20 张困难/AIGC专项
-├── strategies/            # v1～v3.2.2 不可变策略
-├── v3-agent-evidence/     # 最新 v3.2.2 高清 Agent 证据子集
-├── reports/               # 当前人工完成部分报告
-└── review-progress.json
+├── strategy/              # 当前 v3.3.0 不可变策略快照
+├── documentation/         # 安装、算法、评审和证据报告
+└── VERSION.json           # 当前版本、分母和人工证据哈希
 ```
 
-请先读根 `README.md` 和 `review-progress.json`。不要把 `all60` 的旧机器列误当成 v3.2.2；最新汇总读仓库 `docs/reviews/movie60-v3/`。
+请先读根 `README.md` 和 `VERSION.json`。`all60/candidate-review.csv` 的 Rule 列属于 v3.3.0，人工列是从既有评审逐行迁移并校验的真实人工记录。
 
 ### 8.3 素材边界
 
@@ -349,7 +347,7 @@ Get-Item -LiteralPath $input | Select-Object FullName,Length,LastWriteTime
 PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
   -InputImage "D:\images\poster.jpg" `
   -CaseId "movie-demo-001" `
-  -Strategy "strategies\movie60\v3_2_2\bundle.yaml"
+  -Strategy "strategies\movie60\v3_3\bundle.yaml"
 ```
 
 ### 9.4 脚本内部的四阶段
@@ -383,7 +381,7 @@ PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
 
 #### 阶段 D：Evaluation
 
-每张候选重新执行检测，并与原图检测/像素/Transform 比较，应用 v3.2.2 Rule。策略完整复制进 Evaluation。
+每张候选重新执行检测，并与原图检测/像素/Transform 比较，应用 v3.3.0 Rule。策略完整复制进 Evaluation。
 
 ### 9.5 成功检查
 
@@ -406,8 +404,8 @@ Get-ChildItem "$run\evaluations\movie-demo-001-rule-v2\strategy" -Recurse -File
 .\.venv\Scripts\retarget-engine.exe score reference `
   "D:\images\source.jpg" `
   "D:\images\candidate.png" `
-  --output-dir "local_data\scores\case-001-rule-v3-2-2" `
-  --strategy "strategies\movie60\v3_2_2\bundle.yaml"
+  --output-dir "local_data\scores\case-001-rule-v3-3" `
+  --strategy "strategies\movie60\v3_3\bundle.yaml"
 ```
 
 ### 10.2 为什么这是完整 Rule，而不是简单相似度
@@ -419,14 +417,14 @@ Get-ChildItem "$run\evaluations\movie-demo-001-rule-v2\strategy" -Recurse -File
 - OCR 字符召回和序列相似；
 - 人脸/人物/商品/Logo 数量保留；
 - ORB、清晰度、边缘、色彩、结构线和构图；
-- v3.2.2 权重、软调整、等级阈值和声明式门禁。
+- v3.3.0 权重、证据罚分、等级阈值和声明式门禁。
 
 因为候选不是由当前 Run 生成，`transform=None`，所以没有该算法的 seam/mesh/warp 过程风险。若必须评价 Transform，需要使用完整 Run，而不是只给两张图。
 
 ### 10.3 输出逐项阅读
 
 ```text
-local_data/scores/case-001-rule-v3-2-2/
+local_data/scores/case-001-rule-v3-3/
 ├── report.json
 ├── report.md
 ├── overlay.png
@@ -466,7 +464,7 @@ agent_review_status = not_requested
 .\.venv\Scripts\retarget-engine.exe score standalone `
   "D:\images\candidate.png" `
   --output-dir "local_data\scores\case-001-standalone" `
-  --strategy "strategies\movie60\v3_2_2\bundle.yaml"
+  --strategy "strategies\movie60\v3_3\bundle.yaml"
 ```
 
 可得到：尺寸、空白、Laplacian 清晰度、边缘密度、亮度、对比度和候选检测框。
@@ -489,7 +487,7 @@ foreach ($file in $files) {
   PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
     -InputImage $file.FullName `
     -CaseId $caseId `
-    -Strategy "strategies\movie60\v3_2_2\bundle.yaml"
+    -Strategy "strategies\movie60\v3_3\bundle.yaml"
   if ($LASTEXITCODE -ne 0) {
     throw "Batch stopped at $($file.FullName)"
   }
@@ -619,8 +617,8 @@ analysis:
 ```powershell
 .\.venv\Scripts\retarget-engine.exe evaluate `
   runs\my-batch-square-v1 `
-  --evaluation-id my-batch-rule-v3-2-2 `
-  --strategy strategies\movie60\v3_2_2\bundle.yaml
+  --evaluation-id my-batch-rule-v3-3 `
+  --strategy strategies\movie60\v3_3\bundle.yaml
 ```
 
 ```powershell
@@ -646,7 +644,7 @@ audit 检查候选方法集合、状态和 Run 合同，不负责人工视觉验
 
 ```powershell
 .\.venv\Scripts\retarget-engine.exe strategy diff `
-  strategies\movie60\v3_2_2\bundle.yaml `
+  strategies\movie60\v3_3\bundle.yaml `
   strategies\movie60\v3_3_0\bundle.yaml
 ```
 
@@ -657,17 +655,17 @@ audit 检查候选方法集合、状态和 Run 合同，不负责人工视觉验
 ```powershell
 .\.venv\Scripts\retarget-engine.exe agent replay `
   runs\my-batch-square-v1 `
-  --evaluation-id my-batch-rule-v3-2-2 `
+  --evaluation-id my-batch-rule-v3-3 `
   --agent-run-id my-batch-agent-v3-2-2-v1 `
   --mode always_on_agent `
   --backend-url "http://127.0.0.1:8000/v1" `
   --model "<内部模型ID>" `
-  --strategy strategies\movie60\v3_2_2\bundle.yaml
+  --strategy strategies\movie60\v3_3\bundle.yaml
 ```
 
 为什么 Agent 必须在 Rule 后：它需要完整 Rule 排名、Top1 和每候选指标作为结构化证据。
 
-当前 v3.2.2 是 `advisory_only`。Agent 结果写入独立 `agent-runs/`，不改变 Rule Evaluation。
+当前 v3.3.0 是 `advisory_only`。Agent 结果写入独立 `agent-runs/`，不改变 Rule Evaluation。
 
 ## 16. 人工评审 UI
 
@@ -693,10 +691,10 @@ http://127.0.0.1:8765/
 
 例如把 A 阈值从 90 改为 80：
 
-1. 复制 `strategies/movie60/v3_2_2/` 为新目录 `v3_3_0/`；
+1. 复制 `strategies/movie60/v3_3/` 为新目录 `v3_3_0/`；
 2. 修改 `bundle.yaml` 的 version、parent、description；
 3. 修改 `scoring.yaml` 的 policy/version 和 `proxy_a_threshold`；
-4. 不修改 v3.2.2；
+4. 不修改 v3.3.0；
 5. `strategy show` 与 `strategy diff`；
 6. 新 Evaluation ID 跑 Calibration；
 7. 冻结后再跑独立 Validation。
@@ -804,7 +802,7 @@ Movie60 大图通过私有 Release 受控分享，不进入普通 Git tree。
 
 - [ ] 没有把 `.venv` 从别的电脑复制过来；
 - [ ] 没有用 `--no-detectors` 形成正式结论；
-- [ ] 没有把旧 Release 主表说成 v3.2.2；
+- [ ] 没有把历史 Release 的机器列说成 v3.3.0；
 - [ ] 没有覆盖旧 Run/Evaluation/Strategy；
 - [ ] 没有调用未经授权的 Agent/AIGC/API；
 - [ ] 没有把受限图片、模型或密钥提交 Git。

@@ -34,10 +34,23 @@ RELEASE_ID = "movie60-review-v3"
 DATASET_ID = "movie-visual-60-v1"
 DATASET_VERSION = "1.0.0"
 STRATEGY_ID = "movie60"
-STRATEGY_VERSION = "3.2.2"
-STRATEGY_SHA256 = "49a74b7132b0efe8cf4b014644db7a56d77b8820df1d21b4388d0a33e81ecd73"
-EVALUATION_ID = "movie60-human-aligned-v3-2-2-20260821"
+STRATEGY_VERSION = "3.3.0"
+STRATEGY_SHA256 = "b09353f51bd65fd376269bbbe3196269f0276a2445a7f01f3ea71915d9fa8792"
+EVALUATION_ID = "movie60-human-aligned-v3-3-20260821"
 LABEL_SOURCE = "human_screened_large_model_proxy_not_human_ground_truth"
+CURRENT_EVIDENCE_DIR = f"current-v{STRATEGY_VERSION}"
+HUMAN_REVIEW_FIELDS = (
+    "task_id",
+    "candidate_id",
+    "method",
+    "image_sha256",
+    "human_grade",
+    "human_reason",
+    "human_issue_codes",
+    "human_confirmed",
+    "reviewer_id",
+    "updated_at",
+)
 
 
 @dataclass(frozen=True)
@@ -99,6 +112,36 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _human_review_snapshot(rows: list[dict[str, str]]) -> dict[str, Any]:
+    """Return a stable identity for real human rows copied into the release."""
+
+    reviewed = [row for row in rows if row.get("human_grade") in {"A", "B", "C", "D"}]
+    invalid = [row for row in rows if row.get("human_grade") not in {"", "A", "B", "C", "D"}]
+    if invalid:
+        raise ValueError("candidate review contains an invalid human grade")
+    if any(row.get("human_confirmed") != "true" for row in reviewed):
+        raise ValueError("every copied human grade must be explicitly confirmed")
+    normalized = [
+        {field: row.get(field, "") for field in HUMAN_REVIEW_FIELDS}
+        for row in sorted(reviewed, key=lambda item: (item["task_id"], item["method"]))
+    ]
+    payload = json.dumps(
+        normalized,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return {
+        "candidate_count": len(reviewed),
+        "task_count": len({row["task_id"] for row in reviewed}),
+        "grade_counts": {
+            grade: sum(row["human_grade"] == grade for row in reviewed)
+            for grade in ("A", "B", "C", "D")
+        },
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
 def _method_from_candidate(candidate_id: str) -> str:
     parts = candidate_id.split("--")
     if len(parts) != 3 or parts[1] not in METHODS:
@@ -147,7 +190,7 @@ def _comparison(
     draw.text((42, 25), task_id, font=_font(38), fill="white")
     draw.text(
         (1878, 34),
-        f"v3.2.2 · Rule Top1 · {method} · {grade}",
+        f"v{STRATEGY_VERSION} · Rule Top1 · {method} · {grade}",
         font=_font(25),
         fill="#d9dde2",
         anchor="ra",
@@ -160,7 +203,7 @@ def _comparison(
     draw.text((990, 115), "当前 Rule Top1", font=_font(31), fill="#222222")
     draw.text(
         (30, 1035),
-        "策略 movie60@3.2.2；机器等级是代理指标，不是完整人工金标。",
+        f"策略 {STRATEGY_ID}@{STRATEGY_VERSION}；机器等级是代理指标，不是完整人工金标。",
         font=_font(25),
         fill="#525a64",
         anchor="lm",
@@ -175,7 +218,7 @@ def _percent(value: Any) -> str:
 
 def _rule_reason(rank: int, metrics: dict[str, Any]) -> str:
     parts = [
-        f"v3.2.2 Rule 分 {float(metrics['quality_score']):.2f}，排名 {rank}/7",
+        f"v{STRATEGY_VERSION} Rule 分 {float(metrics['quality_score']):.2f}，排名 {rank}/7",
         f"内容保真 {_percent(metrics.get('content_fidelity_score'))}",
         f"视觉完整 {_percent(metrics.get('visual_integrity_score'))}",
         f"构图 {_percent(metrics.get('composition_score'))}",
@@ -240,7 +283,7 @@ def _partition_paths(
     )
     matches = [item for item in choices if (item[2] / "decisions" / f"{task_id}.json").is_file()]
     if len(matches) != 1:
-        raise ValueError(f"{task_id}: expected exactly one v3.2.2 partition")
+        raise ValueError(f"{task_id}: expected exactly one v{STRATEGY_VERSION} partition")
     return matches[0]
 
 
@@ -293,7 +336,7 @@ main{display:grid;grid-template-columns:repeat(auto-fit,minmax(410px,1fr));gap:2
 article{background:#fff;border:1px solid #ddd}article img{display:block;width:100%}article div{padding:16px 20px}
 h2{font-size:20px;word-break:break-all}a{color:#1769aa;text-decoration:none}.hidden{display:none}
 </style></head><body><header><h1>Movie60 v3 · 60 张当前结果</h1>
-<p>策略 movie60@3.2.2；Rule 主选，Agent 仅提供建议。机器等级不是人工金标。</p></header>
+<p>策略 movie60@3.3.0；Rule 主选，Agent 仅提供建议。机器等级不是人工金标。</p></header>
 <nav><button data-filter="all">全部 60</button><button data-filter="A">A</button>
 <button data-filter="B">B</button><button data-filter="C">C</button><button data-filter="D">D</button></nav>
 <main>"""
@@ -364,6 +407,7 @@ def materialize_movie60_review_v3(
     if len(old_summary) != 60 or len(old_candidates) != 420:
         raise ValueError("base workspace must contain exactly 60 tasks and 420 candidates")
     old_candidate_map = {(row["task_id"], row["method"]): row for row in old_candidates}
+    source_human_review = _human_review_snapshot(old_candidates)
     old_summary_map = {row["task_id"]: row for row in old_summary}
     task_ids = sorted(old_summary_map)
 
@@ -402,7 +446,7 @@ def materialize_movie60_review_v3(
                     task_output / "00_source.jpg", quality=96, optimize=True
                 )
 
-            current_evidence = task_output / "evidence" / "current-v3.2.2"
+            current_evidence = task_output / "evidence" / CURRENT_EVIDENCE_DIR
             _write_json(current_evidence / "decision.json", decision)
             _write_json(current_evidence / "overview-decision.json", overview)
             _copy_visual_evidence(visual_root, task_id, current_evidence)
@@ -545,7 +589,7 @@ def materialize_movie60_review_v3(
 - 分区：`{partition}`
 - 当前部署选择：`{selected_method}`（Rule Top1）
 
-`candidates/` 保存七张完整候选。`evidence/current-v3.2.2/` 只保存当前 Rule、
+`candidates/` 保存七张完整候选。`evidence/{CURRENT_EVIDENCE_DIR}/` 只保存当前 Rule、
 Agent 总览、高清三候选复核、配对复核与逐候选指标。历史证据没有混入本任务目录。
 
 机器等级是代理判断，不是独立人工真值；人工评分保存在 `../../candidate-review.csv`。
@@ -579,6 +623,28 @@ Agent 总览、高清三候选复核、配对复核与逐候选指标。历史�
             )
 
         _write_csv(all60 / "candidate-review.csv", output_candidates)
+        output_human_review = _human_review_snapshot(output_candidates)
+        if output_human_review != source_human_review:
+            raise ValueError("human review rows changed while materializing the current release")
+        human_rows = [
+            {field: row.get(field, "") for field in HUMAN_REVIEW_FIELDS}
+            for row in output_candidates
+            if row.get("human_grade") in {"A", "B", "C", "D"}
+        ]
+        _write_csv(all60 / "human-review-current.csv", human_rows)
+        _write_json(
+            all60 / "human-review-status.json",
+            {
+                "schema_version": "1.0",
+                "reviewed_candidate_count": output_human_review["candidate_count"],
+                "reviewed_task_count": output_human_review["task_count"],
+                "pending_candidate_count": len(output_candidates)
+                - output_human_review["candidate_count"],
+                "grade_counts": output_human_review["grade_counts"],
+                "sha256": output_human_review["sha256"],
+                "note": "仅 A/B/C/D 且 human_confirmed=true 的记录属于真实人工评审。",
+            },
+        )
         _write_csv(all60 / "summary.csv", output_summary)
         top1_rows = []
         candidate_map = {(row["task_id"], row["method"]): row for row in output_candidates}
@@ -604,7 +670,7 @@ Agent 总览、高清三候选复核、配对复核与逐候选指标。历史�
 
         human_count = sum(row["human_grade"] in {"A", "B", "C", "D"} for row in output_candidates)
         version = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "release_id": RELEASE_ID,
             "dataset_id": DATASET_ID,
             "dataset_version": DATASET_VERSION,
@@ -619,6 +685,9 @@ Agent 总览、高清三候选复核、配对复核与逐候选指标。历史�
             "task_count": 60,
             "candidate_count": 420,
             "human_reviewed_candidate_count": human_count,
+            "human_reviewed_task_count": output_human_review["task_count"],
+            "human_review_grade_counts": output_human_review["grade_counts"],
+            "human_review_sha256": output_human_review["sha256"],
             "partition_counts": partition_counts,
             "focus20_aigc_evidence_version": "movie60-focus20-aigc-v1-preserved",
         }
@@ -628,9 +697,9 @@ Agent 总览、高清三候选复核、配对复核与逐候选指标。历史�
             all60 / "machine-report.json",
             {
                 **version,
-                "development_report": "documentation/movie60-v3/agent-v3-2-2-development/report.json",
-                "proxy_holdout_report": "documentation/movie60-v3/agent-v3-2-2-proxy-holdout/report.json",
-                "deployment_freeze": "documentation/movie60-v3/deployment-freeze.json",
+                "development_report": "documentation/movie60-v3/agent-v3-3-development/report.json",
+                "proxy_holdout_report": "documentation/movie60-v3/agent-v3-3-proxy-holdout/report.json",
+                "deployment_freeze": "documentation/movie60-v3/deployment-freeze-v3-3.json",
             },
         )
         (all60 / "README.md").write_text(
@@ -638,8 +707,10 @@ Agent 总览、高清三候选复核、配对复核与逐候选指标。历史�
 
 这是当前唯一主结果表：60 个 Task、每个 Task 七张候选，共 420 张。
 
-- `summary.csv`：v3.2.2 Rule 主选和 Agent 建议摘要；
-- `candidate-review.csv`：v3.2.2 逐候选分数、Agent 证据、已有人工记录；
+- `summary.csv`：v3.3.0 Rule 主选和 Agent 建议摘要；
+- `candidate-review.csv`：v3.3.0 逐候选分数、Agent 证据、已有人工记录；
+- `human-review-current.csv`：18 个 Task、126 个候选的已确认人工等级和理由；
+- `human-review-status.json`：人工等级分布、待评数量和防篡改哈希；
 - `tasks/<task_id>/`：原图、七候选、当前 Top1 和当前版本证据；
 - `index.html`：无需 Python 的只读浏览页。
 
@@ -660,20 +731,31 @@ Agent 总览、高清三候选复核、配对复核与逐候选指标。历史�
             )
 
         documentation = root / "documentation"
-        shutil.copytree(
-            sources.repository / "docs" / "reviews" / "movie60-v3", documentation / "movie60-v3"
-        )
+        review_source = sources.repository / "docs" / "reviews" / "movie60-v3"
+        review_target = documentation / "movie60-v3"
+        for name in (
+            "README.md",
+            "CURRENT_DATA_AND_ROUTE_STATUS.md",
+            "RULE_V3_3_HUMAN_THRESHOLD_REPORT.md",
+            "AGENT_V3_3_CURRENT_REPORT.md",
+            "deployment-freeze-v3-3.json",
+        ):
+            _copy_file(review_source / name, review_target / name)
+        for name in ("agent-v3-3-development", "agent-v3-3-proxy-holdout"):
+            shutil.copytree(review_source / name, review_target / name)
         for name in (
             "DEVELOPER_OPERATION_MANUAL.md",
             "DEVELOPER_OPERATION_MANUAL_DETAILED.md",
             "DEVELOPER_ALGORITHM_PRINCIPLES.md",
             "DEVELOPER_ALGORITHM_REFERENCE.md",
+            "MOVIE60_V3_RULE_AGENT_GUIDE.md",
+            "MOVIE60_REVIEW_V3_RELEASE.md",
             "REVIEW_GUIDE.md",
         ):
             _copy_file(sources.repository / "docs" / name, documentation / name)
         shutil.copytree(
-            sources.repository / "strategies" / "movie60" / "v3_2_2",
-            root / "strategy" / "movie60-v3.2.2",
+            sources.repository / "strategies" / "movie60" / "v3_3",
+            root / "strategy" / "movie60-v3.3.0",
         )
         shutil.move(str(root), output_dir)
 
@@ -697,8 +779,9 @@ def validate_movie60_review_v3(root: Path) -> dict[str, Any]:
     for key, value in expected.items():
         if version.get(key) != value:
             raise ValueError(f"VERSION.json {key} mismatch: {version.get(key)!r} != {value!r}")
-    summary = _read_csv(root / "all60" / "summary.csv")
-    candidates = _read_csv(root / "all60" / "candidate-review.csv")
+    all60 = root / "all60"
+    summary = _read_csv(all60 / "summary.csv")
+    candidates = _read_csv(all60 / "candidate-review.csv")
     if len(summary) != 60 or len({row["task_id"] for row in summary}) != 60:
         raise ValueError("v3 workspace must contain exactly 60 unique tasks")
     if (
@@ -711,6 +794,33 @@ def validate_movie60_review_v3(root: Path) -> dict[str, Any]:
             raise ValueError("candidate-review.csv contains a non-current strategy row")
         if row["evaluation_id"] != EVALUATION_ID:
             raise ValueError("candidate-review.csv contains a non-current evaluation row")
+    human_review = _human_review_snapshot(candidates)
+    human_only = _read_csv(all60 / "human-review-current.csv")
+    human_only_snapshot = _human_review_snapshot(human_only)
+    if human_only_snapshot != human_review:
+        raise ValueError(
+            "human review hash differs between human-review-current.csv "
+            "and candidate-review.csv"
+        )
+    human_status = _read_json(all60 / "human-review-status.json")
+    if human_status.get("reviewed_candidate_count") != human_review["candidate_count"]:
+        raise ValueError("human review status candidate count mismatch")
+    if human_status.get("reviewed_task_count") != human_review["task_count"]:
+        raise ValueError("human review status task count mismatch")
+    if human_status.get("pending_candidate_count") != 420 - human_review["candidate_count"]:
+        raise ValueError("human review status pending count mismatch")
+    if human_status.get("grade_counts") != human_review["grade_counts"]:
+        raise ValueError("human review status grade counts mismatch")
+    if human_status.get("sha256") != human_review["sha256"]:
+        raise ValueError("human review status hash mismatch")
+    if version.get("human_reviewed_candidate_count") != human_review["candidate_count"]:
+        raise ValueError("VERSION.json human candidate count does not match the review table")
+    if version.get("human_reviewed_task_count") != human_review["task_count"]:
+        raise ValueError("VERSION.json human task count does not match the review table")
+    if version.get("human_review_grade_counts") != human_review["grade_counts"]:
+        raise ValueError("VERSION.json human grade counts do not match the review table")
+    if version.get("human_review_sha256") != human_review["sha256"]:
+        raise ValueError("VERSION.json human review hash does not match the review table")
     for row in summary:
         task_dir = root / "all60" / "tasks" / row["task_id"]
         candidates_dir = task_dir / "candidates"
@@ -721,7 +831,7 @@ def validate_movie60_review_v3(root: Path) -> dict[str, Any]:
             for name in ("00_source.jpg", "01_final.png", "02_comparison.jpg")
         ):
             raise ValueError(f"{row['task_id']}: source/final/comparison set is incomplete")
-        evidence = task_dir / "evidence" / "current-v3.2.2"
+        evidence = task_dir / "evidence" / CURRENT_EVIDENCE_DIR
         if not all(
             (evidence / name).is_file()
             for name in ("decision.json", "overview-decision.json", "rule-ranking.json")
@@ -746,9 +856,9 @@ def validate_movie60_review_v3(root: Path) -> dict[str, Any]:
         "release_id": RELEASE_ID,
         "task_count": 60,
         "candidate_count": 420,
-        "human_reviewed_candidate_count": sum(
-            row["human_grade"] in {"A", "B", "C", "D"} for row in candidates
-        ),
+        "human_reviewed_candidate_count": human_review["candidate_count"],
+        "human_reviewed_task_count": human_review["task_count"],
+        "human_review_sha256": human_review["sha256"],
     }
 
 

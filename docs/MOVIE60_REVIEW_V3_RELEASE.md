@@ -6,8 +6,8 @@
 
 - Dataset：`movie-visual-60-v1@1.0.0`；
 - Run：`movie60-square-v1-20260818`；
-- Evaluation：`movie60-human-aligned-v3-2-2-20260821`；
-- Strategy：`movie60@3.2.2`；
+- Evaluation：`movie60-human-aligned-v3-3-20260821`；
+- Strategy：`movie60@3.3.0`；
 - 路由：Rule 主选，Agent advisory-only。
 
 ## 2. 从冻结本地证据构建工作区
@@ -17,14 +17,19 @@
 ```powershell
 .\.venv\Scripts\python.exe scripts\materialize_movie60_review_v3.py `
   --repository . `
-  --base-workspace "G:\Projects\retarget-abillity-rule-v3\local_data\movie60-review-v2-det-verify" `
+  --base-workspace "G:\Projects\retarget-release\movie60-review-v3" `
   --run "G:\Projects\retarget-engine\runs\movie60-square-v1-20260818" `
-  --output-dir "G:\Projects\retarget-release\movie60-review-v3"
+  --output-dir "G:\Projects\retarget-release\movie60-review-v3-next"
 ```
 
+先校验 `movie60-review-v3-next`，再由发布负责人把旧工作区移入 `legacy/` 并将新工作区改为规范名；不要让构建器原地覆盖正在使用的人工评审目录。
+
 构建器读取旧包中的图片、AIGC 实际回图和已有人工记录，但会重新生成 `all60` 的
-v3.2.2 Rule 排名、Agent 建议、当前证据目录、Top1 和版本字段。旧机器证据不会进入新的
-`all60/tasks/<task_id>/evidence/current-v3.2.2/`。
+v3.3.0 Rule 排名、Agent 建议、当前证据目录、Top1 和版本字段。旧机器证据不会进入新的
+`all60/tasks/<task_id>/evidence/current-v3.3.0/`。已有人工等级、理由、问题码、评审者和
+时间戳逐行迁移，并用 SHA-256 锁定。当前门禁值为 18 个 Task、126 个候选；少一条或改动
+任一人工字段都会让构建失败。已确认记录另存为 `all60/human-review-current.csv`，其数量、
+待评数量与哈希见 `all60/human-review-status.json`，便于开发交接和后续增量评审。
 
 校验现有工作区：
 

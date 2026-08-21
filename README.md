@@ -13,7 +13,7 @@
 - direct warp、crop、受限/完整 seam、受限/完整 mesh、seam+scale；
 - 当前 Windows CPU 检测栈：PP-OCRv6 small、D-FINE-HGNetV2-N、YuNet、Logo 候选；
 - Detector、参考/无参考 Scorer、Rule、Selector、Agent backend、Prompt 和 Skill 均为白名单插件或不可变策略文件；
-- StrategyBundle v1/v2/v2.1/v3/v3.1/v3.2/v3.2.1/v3.2.2 与旧 Run 兼容，每次 Evaluation 保存完整策略快照；
+- StrategyBundle v1/v2/v2.1/v3/v3.1/v3.2/v3.2.1/v3.2.2/v3.3 与旧 Run 兼容，每次 Evaluation 保存完整策略快照；
 - 单图有参考评分、无参考技术检查、批量 Run、Agent Replay 和本地人工评审 UI。
 
 ## 从零开始
@@ -41,7 +41,7 @@ PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
 ```powershell
 .\.venv\Scripts\retarget-engine.exe score reference source.jpg candidate.jpg `
   --output-dir local_data\scores\poster-001 `
-  --strategy strategies\movie60\v3_2_2\bundle.yaml
+  --strategy strategies\movie60\v3_3\bundle.yaml
 ```
 
 完整命令见 [单张与批量运行](docs/runbooks/RUN_ONE_OR_BATCH.md)。

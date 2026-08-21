@@ -40,13 +40,13 @@ def main() -> int:
         repository=args.repository,
         base_workspace=args.base_workspace,
         run=run,
-        evaluation=run / "evaluations" / "movie60-human-aligned-v3-2-2-20260821",
-        development_overview=agent_runs / "movie60-v3-2-2-agent-overview-dev45-v1-20260821",
-        holdout_overview=agent_runs / "movie60-v3-2-2-agent-overview-holdout15-v1-20260821",
-        development_advisory=strict / "movie60-v3-2-2-agent-advisory-dev45-v1-20260821",
-        holdout_advisory=strict / "movie60-v3-2-2-agent-advisory-holdout15-v1-20260821",
-        development_visual_review=strict / "movie60-v3-2-agent-strict-dev45-v1-20260821",
-        holdout_visual_review=strict / "movie60-v3-2-1-agent-strict-holdout15-v1-20260821",
+        evaluation=run / "evaluations" / "movie60-human-aligned-v3-3-20260821",
+        development_overview=agent_runs / "movie60-v3-3-agent-overview-dev45-v2-20260821",
+        holdout_overview=agent_runs / "movie60-v3-3-agent-overview-holdout15-v2-20260821",
+        development_advisory=strict / "movie60-v3-3-agent-strict-dev45-v4-20260821",
+        holdout_advisory=strict / "movie60-v3-3-agent-strict-holdout15-v2-20260821",
+        development_visual_review=strict / "movie60-v3-3-agent-strict-dev45-v4-20260821",
+        holdout_visual_review=strict / "movie60-v3-3-agent-strict-holdout15-v2-20260821",
     )
     result = materialize_movie60_review_v3(sources, args.output_dir)
     print(json.dumps(result, ensure_ascii=False))

@@ -9,7 +9,7 @@ from retarget_agent.agents import (
     AgentReplayConfig,
     run_agent_replay,
 )
-from retarget_agent.models import RunManifest, TaskSpec
+from retarget_agent.models import RunManifest, TaskSpec, validate_id
 from retarget_agent.plugin_catalog import built_in_plugin_catalog
 from retarget_agent.rule_anchored_review import run_rule_anchored_review
 from retarget_agent.storage import LocalArtifactStore
@@ -61,6 +61,10 @@ def main() -> None:
         subparser.add_argument("--model", required=True)
         subparser.add_argument("--strategy", type=Path, required=True)
         subparser.add_argument("--timeout-seconds", type=float, default=120.0)
+        subparser.add_argument(
+            "--cache-namespace",
+            help="Optional isolated cache namespace for safe parallel workers.",
+        )
     overview.add_argument("--agent-run-id", required=True)
     overview.add_argument("--comparison-dir", type=Path, required=True)
     review.add_argument("--overview-agent-run-id", required=True)
@@ -69,9 +73,12 @@ def main() -> None:
     args = parser.parse_args()
     run_dir = args.run_dir.resolve()
     strategy = load_strategy_bundle(args.strategy)
+    if args.cache_namespace:
+        validate_id(args.cache_namespace)
     plugins = built_in_plugin_catalog()
     tasks = _task_ids(run_dir, args.phase, args.task_ids_file)
     strategy_cache_key = strategy.source_sha256[:12]
+    cache_suffix = f"-{args.cache_namespace}" if args.cache_namespace else ""
     if args.command == "overview":
         backend = plugins.agent_backends.get(strategy.bundle.agent_backend_plugin)(
             base_url=args.backend_url,
@@ -80,7 +87,7 @@ def main() -> None:
             cache_path=(
                 run_dir
                 / "agent-cache"
-                / f"overview-rule-aware-{strategy_cache_key}.json"
+                / f"overview-rule-aware-{strategy_cache_key}{cache_suffix}.json"
             ),
             skill=strategy.agent_skill,
             skill_sha256=strategy.file_hashes[strategy.bundle.agent_skill],
@@ -114,12 +121,12 @@ def main() -> None:
             candidate_cache_path=(
                 run_dir
                 / "agent-cache"
-                / f"strict-rule-anchor-{strategy_cache_key}.json"
+                / f"strict-rule-anchor-{strategy_cache_key}{cache_suffix}.json"
             ),
             pair_cache_path=(
                 run_dir
                 / "agent-cache"
-                / f"pair-rule-anchor-{strategy_cache_key}.json"
+                / f"pair-rule-anchor-{strategy_cache_key}{cache_suffix}.json"
             ),
             strict_prompt_template=(
                 strategy.prompts.strict_candidate if strategy.prompts else None

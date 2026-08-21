@@ -133,13 +133,13 @@ Generation、Evaluation、Agent 和 Human Review 是独立阶段。后一个阶�
 2. OCR、人脸、人物/商品/物体、Logo 候选重检；
 3. 原图与候选的内容、完整性和构图比较；
 4. 结合该方法的 Transform 风险；
-5. 应用 Strategy 中的分数、软调整和硬门禁。
+5. 应用 Strategy 中的分数、证据罚分和硬门禁。
 
 检测器是证据生成器，不是人工真值。漏检需要由高清像素、Agent 或人工复核纠正。
 
 ## 6. Rule 评分的通俗解释
 
-当前 v3.2.2 先计算三个 0～1 的组成分，再换算成 0～100：
+当前 v3.3.0 先计算三个 0～1 的组成分，再换算成 0～100：
 
 ```text
 基础 Quality = 100 × (
@@ -174,9 +174,9 @@ Generation、Evaluation、Agent 和 Human Review 是独立阶段。后一个阶�
 
 当前参考保护框边界安全和视觉中心。它不要求复制原图构图，而是避免把重要元素卡在边缘、让主体严重偏离可见区域。
 
-### 6.4 软调整和门禁
+### 6.4 证据罚分和门禁
 
-基础分之后，策略可以按场景和方法加减小幅先验，并对部分回归施加软罚分。最后执行声明式门禁。
+v3.3 不再按场景名或方法名奖励分数。基础分之后只对已经观测到的回归施加透明罚分，最后执行声明式门禁。这样人物图或某种算法不会仅凭类别被推到 100 分。
 
 门禁不是“再扣几分”，而是给等级设置上限。例如：
 
@@ -189,10 +189,10 @@ Generation、Evaluation、Agent 和 Human Review 是独立阶段。后一个阶�
 当前等级阈值：
 
 ```text
-A: Quality ≥ 90
-B: 65 ≤ Quality < 90
-C: 50 ≤ Quality < 65
-D: Quality < 50
+A: Quality ≥ 89
+B: 52 ≤ Quality < 89
+C: 42 ≤ Quality < 52
+D: Quality < 42
 ```
 
 A/B 视为机器“可用”，C/D 视为需要其他路线或人工处理。`proxy_grade` 仍是机器代理等级，不是人工真值。
@@ -240,7 +240,7 @@ Agent Skill 中沉淀：
 - 证据不足时如何回退；
 - 中文理由和置信度合同。
 
-当前 `movie60@3.2.2` 的 `agent_selection_mode=advisory_only`。即使 Agent 提出不同 Top1，生产选择仍是 Rule；Agent 结果用于人工复核和下一版 Skill/Rule 迭代。这避免把尚未独立人工验证的模型建议直接当真值。
+当前 `movie60@3.3.0` 的 `agent_selection_mode=advisory_only`。即使 Agent 提出不同 Top1，生产选择仍是 Rule；Agent 结果用于人工复核和下一版 Skill/Rule 迭代。这避免把尚未独立人工验证的模型建议直接当真值。
 
 ## 10. AIGC 是独立可选路线
 

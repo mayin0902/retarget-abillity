@@ -28,7 +28,7 @@ def main() -> None:
     plan.add_argument(
         "--strategy",
         type=Path,
-        default=Path("strategies/movie60/v3_2_2/bundle.yaml"),
+        default=Path("strategies/movie60/v3_3/bundle.yaml"),
     )
 
     generate = subparsers.add_parser("generate")
@@ -44,7 +44,7 @@ def main() -> None:
     evaluate.add_argument(
         "--strategy",
         type=Path,
-        default=Path("strategies/movie60/v3_2_2/bundle.yaml"),
+        default=Path("strategies/movie60/v3_3/bundle.yaml"),
     )
 
     review = subparsers.add_parser("review")
@@ -56,7 +56,7 @@ def main() -> None:
     review.add_argument(
         "--strategy",
         type=Path,
-        default=Path("strategies/movie60/v3_2_2/bundle.yaml"),
+        default=Path("strategies/movie60/v3_3/bundle.yaml"),
     )
     review.add_argument(
         "--task-id",
@@ -75,7 +75,7 @@ def main() -> None:
     report.add_argument(
         "--strategy",
         type=Path,
-        default=Path("strategies/movie60/v3_2_2/bundle.yaml"),
+        default=Path("strategies/movie60/v3_3/bundle.yaml"),
     )
 
     args = parser.parse_args()

@@ -34,6 +34,7 @@ $Required = @(
     'strategies\movie60\v1\bundle.yaml',
     'strategies\movie60\v2\bundle.yaml',
     'strategies\movie60\v3_2_2\bundle.yaml',
+    'strategies\movie60\v3_3\bundle.yaml',
     'datasets\analyzer_models_v1\model_manifest.csv'
 )
 $Missing = $Required | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) }
@@ -72,6 +73,7 @@ Invoke-Checked $Python @('scripts\materialize_company_models.py') 'Company model
 Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v1\bundle.yaml') 'v1 strategy validation'
 Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v2\bundle.yaml') 'v2 strategy validation'
 Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v3_2_2\bundle.yaml') 'v3.2.2 strategy validation'
+Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v3_3\bundle.yaml') 'v3.3 strategy validation'
 Invoke-Checked $Python @('-m', 'pytest', '-q', 'tests\test_strategy.py', 'tests\test_single_image_workflow_tools.py') 'Bootstrap smoke tests'
 
 if ($WithMovie60Release) {

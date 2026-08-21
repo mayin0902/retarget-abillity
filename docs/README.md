@@ -15,7 +15,7 @@
 
 ## 按需深入
 
-1. [MOVIE60_V3_RULE_AGENT_GUIDE.md](MOVIE60_V3_RULE_AGENT_GUIDE.md)：当前 v3.2.2 Rule 主决策、双 Challenger Agent 建议、代理验证和版本迭代；
+1. [MOVIE60_V3_RULE_AGENT_GUIDE.md](MOVIE60_V3_RULE_AGENT_GUIDE.md)：当前 v3.3 Rule 主决策、双 Challenger Agent 建议、代理验证和版本迭代；
 2. [PLUGIN_STRATEGY_GUIDE.md](PLUGIN_STRATEGY_GUIDE.md)：如何换完整实现或只改参数，并保留历史；
 3. [ALGORITHMS.md](ALGORITHMS.md)：七种重定向算法的代码级说明；
 4. [REVIEW_GUIDE.md](REVIEW_GUIDE.md)：逐候选人工评分；
