@@ -36,7 +36,12 @@ strategies:
     sha256: 1c9410eae344243a863de74eb201d5d32fec1a5578ef43a5dddcd2f05ed375d0
     predecessor: movie60@3.2.0
   - strategy: movie60@3.2.2
-    status: active
+    status: frozen
     bundle: movie60/v3_2_2/bundle.yaml
     sha256: 49a74b7132b0efe8cf4b014644db7a56d77b8820df1d21b4388d0a33e81ecd73
     predecessor: movie60@3.2.1
+  - strategy: movie60@3.3.0
+    status: active
+    bundle: movie60/v3_3/bundle.yaml
+    sha256: b09353f51bd65fd376269bbbe3196269f0276a2445a7f01f3ea71915d9fa8792
+    predecessor: movie60@3.2.2

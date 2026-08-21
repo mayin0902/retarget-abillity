@@ -15,16 +15,20 @@
 ## 当前版本
 
 - Dataset：`movie-visual-60-v1@1.0.0`；
-- Evaluation：`movie60-human-aligned-v3-2-2-20260821`；
-- Strategy：`movie60@3.2.2`；
+- Evaluation：`movie60-human-aligned-v3-3-20260821`；
+- Strategy：`movie60@3.3.0`；
 - 路由：Rule 主选，Agent advisory-only；
 - 机器标签：人工粗审过的大模型代理标签，不是完整独立人工金标。
+- 人工证据：18 个 Task、126 个候选；等级、理由、问题码、评审者和时间戳均原样保留并由 `VERSION.json` 摘要校验。
+
+已确认人工记录可直接查看 `all60/human-review-current.csv`，其数量、待评数量与
+防篡改哈希见 `all60/human-review-status.json`。未评候选不会被机器建议冒充为人工标签。
 
 ## 目录
 
-- `all60/`：当前 60×7 候选、v3.2.2 评分、Agent 建议、现有人工记录；
+- `all60/`：当前 60×7 候选、v3.3.0 评分、Agent 建议、现有人工记录；
 - `focus20/`：已经实际产生的 AIGC 图和复评表，未重新调用付费 API；
-- `strategy/`：当前唯一运行策略 v3.2.2；
+- `strategy/`：当前唯一运行策略 v3.3.0；
 - `documentation/`：安装、运行、算法和评审文档；
 - `legacy/`：旧版本问题及查找入口，不复制旧中间资产；
 - `_runtime/`：本包本地 UI 所需最小 Python 源码。

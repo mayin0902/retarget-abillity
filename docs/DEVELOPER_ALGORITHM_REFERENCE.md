@@ -2,7 +2,7 @@
 
 这是 [算法原理说明](DEVELOPER_ALGORITHM_PRINCIPLES.md) 的工程详解版。前一份适合先读；本页用于开发、调参、排查误判和评审新 StrategyBundle。
 
-所有公式均对应当前仓库实现。默认示例使用 `movie60@3.2.2` 和
+所有公式均对应当前仓库实现。默认示例使用 `movie60@3.3.0` 和
 `cn_square_v2` 七方法配置；历史 Run 必须以其自身 `config/run.yaml` 与 Evaluation
 `strategy/` 快照为准。
 
@@ -306,7 +306,7 @@ Text = weighted_mean(
 ```
 
 原图规范化字符至少 4 个且字符召回 `<0.70` 时，基础评估产生
-`critical_text_missing`。在 v3.2.2 human-aligned 后处理中该代码变成透明软罚分 `-2`，真正 C/D 主要由场景门禁决定，避免 OCR 单次漏检直接判死。
+`critical_text_missing`。在 v3.3.0 human-aligned 后处理中该代码变成透明软罚分 `-2`，真正 C/D 主要由场景门禁决定，避免 OCR 单次漏检直接判死。
 
 ### 5.2 人物、人脸、商品和 Logo 数量保留
 
@@ -320,7 +320,7 @@ Preservation = retained × exp(-0.25·additions)
 
 少检直接降低保留率；多检也有轻微惩罚，防止候选伪影被误认为新增主体。原图该类为 0 时返回 `None`，不凭空奖励或惩罚。
 
-突出人脸定义为原图检测置信度≥0.75，且人脸面积占原图≥1.5%。若候选完全检不出该人脸，基础评估记录 `prominent_face_not_redetected`；v3.2.2 把它转为 `-5` 软罚分，另由明确的人脸/人物数量门禁决定等级上限。
+突出人脸定义为原图检测置信度≥0.75，且人脸面积占原图≥1.5%。若候选完全检不出该人脸，基础评估记录 `prominent_face_not_redetected`；v3.3.0 把它转为 `-5` 软罚分，另由明确的人脸/人物数量门禁决定等级上限。
 
 ### 5.3 物体类别 F1
 
@@ -377,7 +377,7 @@ Line = dot(normalized_hist_s, normalized_hist_c)
 
 ### 5.8 Transform Safety
 
-v3.2.2 当前系数：
+v3.3.0 当前系数：
 
 ```text
 WarpSafety = exp(-0.30·d_stretch)
@@ -423,7 +423,7 @@ WeightedMean = Σ(valid_i·weight_i) / Σ(valid_weight_i)
 
 ### 6.1 Content Fidelity
 
-v3.2.2 声明权重：
+v3.3.0 声明权重：
 
 | 指标 | 权重 | 生效条件 |
 |---|---:|---|
@@ -470,21 +470,11 @@ q_base = 100 × weighted_mean(
 
 ## 7. Human-aligned 后处理
 
-`human_aligned_proxy_v3` 不修改底层检测证据，而是从三个组件重新组合基础分，追加透明调整和门禁。
+`human_aligned_proxy_v3` 不修改底层检测证据，而是从三个组件重新组合基础分，追加透明证据罚分和门禁。
 
-### 7.1 当前软调整
+### 7.1 当前证据罚分
 
-| 条件 | 分数变化 |
-|---|---:|
-| person 场景 | +8 |
-| video_cover 场景 | +2 |
-| direct_warp | +6 |
-| seam | +5 |
-| seam_scale | +3 |
-| mesh_full | +1 |
-| seam_full | -8 |
-
-这些是代理开发集先验，不是算法质量定律。调整后的分数 clamp 到 `[0,100]`。
+v3.3 的 `score_adjustments` 为空：人物、海报、`direct_warp`、`seam`、`mesh` 等均不因为名称加分或扣分。连续分只由三个测量组件和下表中已经观测到的回归罚分决定，随后 clamp 到 `[0,100]`。
 
 基础回归软罚分：
 
@@ -497,13 +487,13 @@ q_base = 100 × weighted_mean(
 ### 7.2 分数到等级
 
 ```text
-A: q ≥ 90
-B: 65 ≤ q < 90
-C: 50 ≤ q < 65
-D: q < 50
+A: q ≥ 89
+B: 52 ≤ q < 89
+C: 42 ≤ q < 52
+D: q < 42
 ```
 
-阈值完全来自 `scoring.yaml`，可以在新 Strategy 版本中把 A 改为 80；不得直接修改已经冻结的 v3.2.2。
+阈值完全来自 `scoring.yaml`，可以在下一不可变 Strategy 版本中调整；不得直接修改已经冻结的 v3.3.0。
 
 ### 7.3 声明式门禁
 
@@ -525,7 +515,7 @@ D: q < 50
 
 ## 8. Rule 完整排名
 
-v3.2.2 排序键按顺序比较：
+v3.3.0 排序键按顺序比较：
 
 ```text
 technical_valid desc
@@ -560,7 +550,7 @@ method_id asc
 
 ### 9.3 当前部署
 
-`movie60@3.2.2`：
+`movie60@3.3.0`：
 
 ```text
 agent_selection_mode = advisory_only
@@ -623,7 +613,7 @@ Agent 可发现 Rule 盲区并向人工解释，但不能自动改变生产 Top1
 | human-aligned 后处理 | `src/retarget_agent/human_aligned_scoring.py` |
 | Strategy 数据模型 | `src/retarget_agent/strategy.py` |
 | 插件白名单 | `src/retarget_agent/plugin_catalog.py` |
-| 当前评分 | `strategies/movie60/v3_2_2/scoring.yaml` |
-| 当前排序 | `strategies/movie60/v3_2_2/selection.yaml` |
-| 当前 Agent 门禁 | `strategies/movie60/v3_2_2/override.yaml` |
-| 当前 Prompt/Skill | `strategies/movie60/v3_2_2/prompts/`、`agent-skill.yaml` |
+| 当前评分 | `strategies/movie60/v3_3/scoring.yaml` |
+| 当前排序 | `strategies/movie60/v3_3/selection.yaml` |
+| 当前 Agent 门禁 | `strategies/movie60/v3_3/override.yaml` |
+| 当前 Prompt/Skill | `strategies/movie60/v3_3/prompts/`、`agent-skill.yaml` |

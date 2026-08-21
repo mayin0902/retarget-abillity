@@ -1,0 +1,552 @@
+{
+  "schema_version": "1.0",
+  "partition": "proxy_holdout",
+  "label_provenance": "human_screened_large_model_proxy_not_human_ground_truth",
+  "independent_human_validation": false,
+  "evaluation_id": "movie60-human-aligned-v3-3-20260821",
+  "overview_agent_run_id": "movie60-v3-3-agent-overview-holdout15-v2-20260821",
+  "review_run_id": "movie60-v3-3-agent-strict-holdout15-v2-20260821",
+  "visual_evidence_review_run_id": "movie60-v3-3-agent-strict-holdout15-v2-20260821",
+  "strategy_id": "movie60",
+  "strategy_version": "3.3.0",
+  "strategy_sha256": "b09353f51bd65fd376269bbbe3196269f0276a2445a7f01f3ea71915d9fa8792",
+  "rule_only": {
+    "task_count": 15,
+    "exact_grade_accuracy": 0.6,
+    "ab_cd_agreement": 0.9333333333333333,
+    "cd_recall": 1.0,
+    "cd_precision": 0.5,
+    "selected_candidate_proxy_ab_rate": 0.9333333333333333,
+    "proxy_best_method_hit_rate": 0.8,
+    "predicted_grade_counts": {
+      "A": 5,
+      "B": 8,
+      "D": 2
+    },
+    "selected_truth_grade_counts": {
+      "A": 3,
+      "B": 11,
+      "C": 1
+    }
+  },
+  "agent_only": {
+    "task_count": 15,
+    "exact_grade_accuracy": 0.2,
+    "ab_cd_agreement": 0.4666666666666667,
+    "cd_recall": 0.0,
+    "cd_precision": 0.0,
+    "selected_candidate_proxy_ab_rate": 0.9333333333333333,
+    "proxy_best_method_hit_rate": 0.7333333333333333,
+    "predicted_grade_counts": {
+      "A": 5,
+      "B": 3,
+      "C": 5,
+      "D": 2
+    },
+    "selected_truth_grade_counts": {
+      "A": 2,
+      "B": 12,
+      "C": 1
+    }
+  },
+  "combined": {
+    "task_count": 15,
+    "exact_grade_accuracy": 0.6,
+    "ab_cd_agreement": 0.9333333333333333,
+    "cd_recall": 1.0,
+    "cd_precision": 0.5,
+    "selected_candidate_proxy_ab_rate": 0.9333333333333333,
+    "proxy_best_method_hit_rate": 0.8,
+    "predicted_grade_counts": {
+      "A": 5,
+      "B": 8,
+      "D": 2
+    },
+    "selected_truth_grade_counts": {
+      "A": 3,
+      "B": 11,
+      "C": 1
+    }
+  },
+  "overview_schema_valid_rate": 1.0,
+  "agent_override_count": 0,
+  "mean_strict_review_wall_seconds": 164.00970874,
+  "rows": [
+    {
+      "task_id": "person_005__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "crop",
+        "direct_warp",
+        "mesh",
+        "mesh_full",
+        "seam",
+        "seam_full",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "person_005__square-1536--seam_full--254e4853a6db",
+      "rule_method": "seam_full",
+      "rule_predicted_grade": "A",
+      "rule_truth_grade": "A",
+      "rule_numeric_score": 90.10063967550343,
+      "agent_candidate_id": "person_005__square-1536--direct_warp--b8ded5ae9971",
+      "agent_method": "direct_warp",
+      "agent_predicted_grade": "A",
+      "agent_truth_grade": "A",
+      "agent_confidence": 0.98,
+      "agent_reason": "候选图像在所有关键维度均表现优异，无任何缺陷，可直接使用。",
+      "combined_candidate_id": "person_005__square-1536--seam_full--254e4853a6db",
+      "combined_method": "seam_full",
+      "combined_predicted_grade": "A",
+      "combined_truth_grade": "A",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 129.31886339999983
+    },
+    {
+      "task_id": "person_006__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "crop",
+        "seam_full",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "person_006__square-1536--direct_warp--b8ded5ae9971",
+      "rule_method": "direct_warp",
+      "rule_predicted_grade": "A",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 90.8818767573738,
+      "agent_candidate_id": "person_006__square-1536--seam--fc79166ed2de",
+      "agent_method": "seam",
+      "agent_predicted_grade": "A",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.98,
+      "agent_reason": "候选图像在所有关键维度均表现优异，无任何缺陷，可直接使用。",
+      "combined_candidate_id": "person_006__square-1536--direct_warp--b8ded5ae9971",
+      "combined_method": "direct_warp",
+      "combined_predicted_grade": "A",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 148.7384246999991
+    },
+    {
+      "task_id": "person_008__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "crop",
+        "direct_warp",
+        "seam",
+        "seam_full",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "person_008__square-1536--direct_warp--b8ded5ae9971",
+      "rule_method": "direct_warp",
+      "rule_predicted_grade": "A",
+      "rule_truth_grade": "A",
+      "rule_numeric_score": 97.66367395507956,
+      "agent_candidate_id": "person_008__square-1536--mesh_full--b3fcd2f2bfc7",
+      "agent_method": "mesh_full",
+      "agent_predicted_grade": "A",
+      "agent_truth_grade": "B",
+      "agent_confidence": 1.0,
+      "agent_reason": "候选图像在所有关键维度均与源图一致，无语义缺失、局部形变、不可读文字或伪影，符合高清候选标准。",
+      "combined_candidate_id": "person_008__square-1536--direct_warp--b8ded5ae9971",
+      "combined_method": "direct_warp",
+      "combined_predicted_grade": "A",
+      "combined_truth_grade": "A",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 143.89745500000026
+    },
+    {
+      "task_id": "poster_004__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "seam_scale"
+      ],
+      "rule_candidate_id": "poster_004__square-1536--direct_warp--b8ded5ae9971",
+      "rule_method": "direct_warp",
+      "rule_predicted_grade": "B",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 75.73211071688976,
+      "agent_candidate_id": "poster_004__square-1536--seam--fc79166ed2de",
+      "agent_method": "seam",
+      "agent_predicted_grade": "B",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.95,
+      "agent_reason": "候选图在主体、文字、构图等方面均完整保留源图信息，仅因生成过程存在轻微非均匀缩放导致局部微小变形，不影响使用。",
+      "combined_candidate_id": "poster_004__square-1536--direct_warp--b8ded5ae9971",
+      "combined_method": "direct_warp",
+      "combined_predicted_grade": "B",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 191.61996790000012
+    },
+    {
+      "task_id": "poster_005__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "direct_warp",
+        "mesh",
+        "seam",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "poster_005__square-1536--seam--fc79166ed2de",
+      "rule_method": "seam",
+      "rule_predicted_grade": "B",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 79.62002358851352,
+      "agent_candidate_id": "poster_005__square-1536--direct_warp--b8ded5ae9971",
+      "agent_method": "direct_warp",
+      "agent_predicted_grade": "C",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.98,
+      "agent_reason": "传统变换证据纠正了视觉低估：由于 d_stretch=0.468，等级上限调整为 C。",
+      "combined_candidate_id": "poster_005__square-1536--seam--fc79166ed2de",
+      "combined_method": "seam",
+      "combined_predicted_grade": "B",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 180.7718373000007
+    },
+    {
+      "task_id": "poster_010__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "crop",
+        "direct_warp",
+        "mesh_full",
+        "seam",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "poster_010__square-1536--direct_warp--b8ded5ae9971",
+      "rule_method": "direct_warp",
+      "rule_predicted_grade": "A",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 89.64822529701271,
+      "agent_candidate_id": "poster_010__square-1536--seam--fc79166ed2de",
+      "agent_method": "seam",
+      "agent_predicted_grade": "C",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.95,
+      "agent_reason": "候选图存在轻微文字识别问题，但主体、构图、Logo等均完整，可直接使用但需注意文字可读性。",
+      "combined_candidate_id": "poster_010__square-1536--direct_warp--b8ded5ae9971",
+      "combined_method": "direct_warp",
+      "combined_predicted_grade": "A",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "critical_text_recall_declined",
+        "pair_did_not_prefer_agent",
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 192.35175100000015
+    },
+    {
+      "task_id": "poster_011__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "direct_warp",
+        "seam"
+      ],
+      "rule_candidate_id": "poster_011__square-1536--direct_warp--b8ded5ae9971",
+      "rule_method": "direct_warp",
+      "rule_predicted_grade": "A",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 91.09898037391213,
+      "agent_candidate_id": "poster_011__square-1536--mesh--06e13bedd94b",
+      "agent_method": "mesh",
+      "agent_predicted_grade": "A",
+      "agent_truth_grade": "C",
+      "agent_confidence": 0.98,
+      "agent_reason": "候选图像在所有关键维度均表现优异，无任何缺陷，可直接使用。",
+      "combined_candidate_id": "poster_011__square-1536--direct_warp--b8ded5ae9971",
+      "combined_method": "direct_warp",
+      "combined_predicted_grade": "A",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "critical_text_recall_declined",
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 141.09491249999883
+    },
+    {
+      "task_id": "still_001__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "direct_warp",
+        "mesh_full",
+        "seam"
+      ],
+      "rule_candidate_id": "still_001__square-1536--seam--fc79166ed2de",
+      "rule_method": "seam",
+      "rule_predicted_grade": "B",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 65.5313815907479,
+      "agent_candidate_id": "still_001__square-1536--direct_warp--b8ded5ae9971",
+      "agent_method": "direct_warp",
+      "agent_predicted_grade": "C",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.95,
+      "agent_reason": "传统变换证据纠正了视觉低估：由于 d_stretch=0.871，等级上限调整为 C。",
+      "combined_candidate_id": "still_001__square-1536--seam--fc79166ed2de",
+      "combined_method": "seam",
+      "combined_predicted_grade": "B",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 146.84576389999893
+    },
+    {
+      "task_id": "still_002__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "direct_warp",
+        "seam"
+      ],
+      "rule_candidate_id": "still_002__square-1536--mesh--06e13bedd94b",
+      "rule_method": "mesh",
+      "rule_predicted_grade": "D",
+      "rule_truth_grade": "C",
+      "rule_numeric_score": 57.65901904888927,
+      "agent_candidate_id": "still_002__square-1536--seam--fc79166ed2de",
+      "agent_method": "seam",
+      "agent_predicted_grade": "D",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.98,
+      "agent_reason": "候选图像因主体严重缺失、人脸和身体不可辨识、文字模糊不可读、Logo失真、构图不可发布，整体不可用。",
+      "combined_candidate_id": "still_002__square-1536--mesh--06e13bedd94b",
+      "combined_method": "mesh",
+      "combined_predicted_grade": "D",
+      "combined_truth_grade": "C",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 155.27962660000048
+    },
+    {
+      "task_id": "still_006__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "direct_warp",
+        "seam",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "still_006__square-1536--seam--fc79166ed2de",
+      "rule_method": "seam",
+      "rule_predicted_grade": "D",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 53.657384002569245,
+      "agent_candidate_id": "still_006__square-1536--direct_warp--b8ded5ae9971",
+      "agent_method": "direct_warp",
+      "agent_predicted_grade": "D",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.98,
+      "agent_reason": "传统变换证据纠正了视觉低估：由于 d_stretch=0.871，等级上限调整为 C。",
+      "combined_candidate_id": "still_006__square-1536--seam--fc79166ed2de",
+      "combined_method": "seam",
+      "combined_predicted_grade": "D",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 188.16013530000055
+    },
+    {
+      "task_id": "still_014__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "crop",
+        "direct_warp",
+        "mesh_full",
+        "seam",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "still_014__square-1536--seam_scale--d7f0ce43ebe8",
+      "rule_method": "seam_scale",
+      "rule_predicted_grade": "B",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 72.7246202527256,
+      "agent_candidate_id": "still_014__square-1536--mesh_full--b3fcd2f2bfc7",
+      "agent_method": "mesh_full",
+      "agent_predicted_grade": "C",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.95,
+      "agent_reason": "候选图在主体和构图上基本完整，但存在显著的文本不可读、伪影、结构形变和Logo缺失问题，不符合商业发布标准。",
+      "combined_candidate_id": "still_014__square-1536--seam_scale--d7f0ce43ebe8",
+      "combined_method": "seam_scale",
+      "combined_predicted_grade": "B",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 154.65135949999967
+    },
+    {
+      "task_id": "video_cover_002__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "direct_warp",
+        "seam"
+      ],
+      "rule_candidate_id": "video_cover_002__square-1536--direct_warp--b8ded5ae9971",
+      "rule_method": "direct_warp",
+      "rule_predicted_grade": "B",
+      "rule_truth_grade": "A",
+      "rule_numeric_score": 70.31490606289097,
+      "agent_candidate_id": "video_cover_002__square-1536--seam--fc79166ed2de",
+      "agent_method": "seam",
+      "agent_predicted_grade": "B",
+      "agent_truth_grade": "A",
+      "agent_confidence": 0.95,
+      "agent_reason": "候选图像可直接使用，但主标题副文部分模糊，影响阅读体验。",
+      "combined_candidate_id": "video_cover_002__square-1536--direct_warp--b8ded5ae9971",
+      "combined_method": "direct_warp",
+      "combined_predicted_grade": "B",
+      "combined_truth_grade": "A",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 149.09176600000137
+    },
+    {
+      "task_id": "video_cover_008__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "crop",
+        "direct_warp",
+        "mesh",
+        "mesh_full",
+        "seam",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "video_cover_008__square-1536--mesh_full--b3fcd2f2bfc7",
+      "rule_method": "mesh_full",
+      "rule_predicted_grade": "B",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 85.5804262994143,
+      "agent_candidate_id": "video_cover_008__square-1536--direct_warp--b8ded5ae9971",
+      "agent_method": "direct_warp",
+      "agent_predicted_grade": "C",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.98,
+      "agent_reason": "传统变换证据纠正了视觉低估：由于 d_stretch=0.575，等级上限调整为 C。",
+      "combined_candidate_id": "video_cover_008__square-1536--mesh_full--b3fcd2f2bfc7",
+      "combined_method": "mesh_full",
+      "combined_predicted_grade": "B",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "logo_count_preservation_declined",
+        "pair_did_not_prefer_agent",
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 138.06463629999962
+    },
+    {
+      "task_id": "video_cover_010__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "crop",
+        "direct_warp",
+        "mesh",
+        "mesh_full",
+        "seam",
+        "seam_full",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "video_cover_010__square-1536--mesh_full--b3fcd2f2bfc7",
+      "rule_method": "mesh_full",
+      "rule_predicted_grade": "B",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 86.15350166306081,
+      "agent_candidate_id": "video_cover_010__square-1536--seam_scale--d7f0ce43ebe8",
+      "agent_method": "seam_scale",
+      "agent_predicted_grade": "A",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.98,
+      "agent_reason": "候选图像在所有关键维度均表现良好，无任何缺陷，可直接使用。",
+      "combined_candidate_id": "video_cover_010__square-1536--mesh_full--b3fcd2f2bfc7",
+      "combined_method": "mesh_full",
+      "combined_predicted_grade": "B",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "logo_count_preservation_declined",
+        "pair_did_not_prefer_agent",
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 166.6303123000016
+    },
+    {
+      "task_id": "video_cover_012__square-1536",
+      "partition": "proxy_holdout",
+      "proxy_best_methods": [
+        "crop",
+        "direct_warp",
+        "mesh",
+        "mesh_full",
+        "seam",
+        "seam_full",
+        "seam_scale"
+      ],
+      "rule_candidate_id": "video_cover_012__square-1536--mesh_full--b3fcd2f2bfc7",
+      "rule_method": "mesh_full",
+      "rule_predicted_grade": "B",
+      "rule_truth_grade": "B",
+      "rule_numeric_score": 82.46667119702104,
+      "agent_candidate_id": "video_cover_012__square-1536--mesh--06e13bedd94b",
+      "agent_method": "mesh",
+      "agent_predicted_grade": "B",
+      "agent_truth_grade": "B",
+      "agent_confidence": 0.95,
+      "agent_reason": "候选图可直接使用，但OCR识别准确率偏低，存在轻微文字识别不完整问题",
+      "combined_candidate_id": "video_cover_012__square-1536--mesh_full--b3fcd2f2bfc7",
+      "combined_method": "mesh_full",
+      "combined_predicted_grade": "B",
+      "combined_truth_grade": "B",
+      "agent_overrode_rule": false,
+      "overview_schema_valid": true,
+      "override_block_reasons": [
+        "critical_text_recall_declined",
+        "pair_did_not_prefer_agent",
+        "agent_advisory_only"
+      ],
+      "task_review_wall_seconds": 233.62881939999897
+    }
+  ]
+}

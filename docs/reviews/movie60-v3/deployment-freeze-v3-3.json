@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "frozen_at": "2026-08-21T11:47:14+08:00",
+  "deployment_strategy": "movie60@3.3.0",
+  "strategy_sha256": "b09353f51bd65fd376269bbbe3196269f0276a2445a7f01f3ea71915d9fa8792",
+  "parent_strategy": "movie60@3.2.2",
+  "deployment_route": "rule_primary_agent_advisory",
+  "selection_mode": "advisory_only",
+  "grade_source": "rule_metric",
+  "human_reviewed_task_count": 18,
+  "human_reviewed_candidate_count": 126,
+  "human_review_sha256": "67eafbaf967c9f8b1af9b65e7abc722f9a4d56e28460e092f9cdba613b116928",
+  "proxy_split_sha256": "31e9192bc6236366007a9f7fd65676470ca4d007d3a28e7d43849c0e2c71526b",
+  "development_report": "agent-v3-3-development/report.json",
+  "development_report_sha256": "63ffd0d62ae3aa97d1a9ac7bf1f0c6578773d736b2c338d8a20909acfb1a77b5",
+  "proxy_holdout_report": "agent-v3-3-proxy-holdout/report.json",
+  "proxy_holdout_report_sha256": "32eae4ccf4079d3e0a0f3c63d5eab801271eca5ee09b3d231e827b7de2940c75",
+  "agent_evidence": {
+    "development_overview": "movie60-v3-3-agent-overview-dev45-v2-20260821",
+    "development_strict_review": "movie60-v3-3-agent-strict-dev45-v4-20260821",
+    "proxy_holdout_overview": "movie60-v3-3-agent-overview-holdout15-v2-20260821",
+    "proxy_holdout_strict_review": "movie60-v3-3-agent-strict-holdout15-v2-20260821",
+    "overview_schema_valid_rate": 1.0,
+    "agent_override_count": 0
+  },
+  "decision": "The current 4B visual Agent produced valid Chinese semantic evidence but its A/B/C/D grades remained substantially less calibrated than Rule. Selection evidence was mixed: human best-method hit tied overall and proxy holdout favored Rule. Deployment therefore keeps Rule Top1 and Rule grade while preserving Agent review as advisory evidence.",
+  "label_status": "126_confirmed_human_candidate_reviews_plus_machine_proxy_labels",
+  "independent_external_validation": false,
+  "holdout_used_to_change_v3_3": false,
+  "thresholds_tuned_after_holdout": false
+}

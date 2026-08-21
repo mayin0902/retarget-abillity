@@ -1,0 +1,21 @@
+schema_version: "1.0"
+policy_id: movie60-override-v3-3
+version: "3.3.0"
+rule_usable_grades: [A, B]
+protected_metrics:
+  - person_count_preservation
+  - face_count_preservation
+  - product_count_preservation
+  - logo_count_preservation
+metric_decline_tolerance: 0.01
+minimum_pair_confidence: 0.70
+require_clear_visual_evidence: true
+require_consistent_pair_evidence: true
+require_agent_grade_improvement: false
+max_agent_challengers: 2
+allow_agent_upgrade: true
+allow_agent_downgrade: true
+agent_selection_mode: advisory_only
+combined_grade_source: rule_metric
+request_aigc_grades: [C, D]
+soft_review_target_seconds: 120.0

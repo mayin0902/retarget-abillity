@@ -1,0 +1,6 @@
+Retarget the provided source image into a high-quality square 1:1 composition.
+Preserve the exact identity and natural geometry of every important person, face, body, product,
+logo and structural line. Preserve every visible Simplified-Chinese or English character, number,
+price, date, button and badge exactly as written. Do not translate, rewrite, remove, duplicate or
+invent content. Recompose or extend only unimportant background. Avoid stretching, seam-like
+artifacts, blur, frames and watermark. Return one faithful, directly usable square image.

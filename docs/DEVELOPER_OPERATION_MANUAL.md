@@ -2,8 +2,8 @@
 
 本文面向第一次接手项目的 Windows/Python 开发同学。目标是只依赖仓库、受控模型源和授权素材，从零完成安装、单图运行、批量运行、Rule-only 评分、结果检查和策略迭代。
 
-当前活动策略为 `movie60@3.2.2`，文件入口是
-`strategies/movie60/v3_2_2/bundle.yaml`。除非正在做历史回放，新运行都应显式指定这个 Bundle。
+当前活动策略为 `movie60@3.3.0`，文件入口是
+`strategies/movie60/v3_3/bundle.yaml`。除非正在做历史回放，新运行都应显式指定这个 Bundle。
 
 ## 1. 先理解四种运行方式
 
@@ -100,7 +100,7 @@ PowerShell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1 `
 2. 安装冻结的构建工具、项目和开发依赖；
 3. 安装公司 CPU 检测栈运行时；
 4. 物化并校验 OCR、目标检测、人脸检测等模型；
-5. 校验 v1、v2 与当前 v3.2.2 策略；
+5. 校验 v1、v2 与当前 v3.3.0 策略；
 6. 运行安装 Smoke。
 
 `.venv` 是当前机器和当前路径的虚拟环境，不可复制到另一台电脑。换机器后要重新建
@@ -135,7 +135,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\retarget-engine.exe version
 .\.venv\Scripts\retarget-engine.exe plugins list
 .\.venv\Scripts\retarget-engine.exe strategy show `
-  strategies\movie60\v3_2_2\bundle.yaml
+  strategies\movie60\v3_3\bundle.yaml
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -175,7 +175,7 @@ gh auth status
 PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
   -InputImage "D:\images\poster.jpg" `
   -CaseId "poster-001" `
-  -Strategy "strategies\movie60\v3_2_2\bundle.yaml"
+  -Strategy "strategies\movie60\v3_3\bundle.yaml"
 ```
 
 这个脚本实际执行四步：
@@ -183,7 +183,7 @@ PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
 1. 把原图冻结成一个单图 Dataset；
 2. 校验 Dataset 的尺寸、哈希和路径；
 3. 对同一原图生成七种 1536×1536 候选；
-4. 对每张候选重新检测，并用 v3.2.2 Rule 比较原图后评分。
+4. 对每张候选重新检测，并用 v3.3.0 Rule 比较原图后评分。
 
 它不会调用 Agent，也不会调用 AIGC。
 
@@ -222,7 +222,7 @@ Get-ChildItem runs\poster-001-square-v1\evaluations\poster-001-rule-v2\metrics
   "D:\images\source.jpg" `
   "D:\images\candidate.jpg" `
   --output-dir "local_data\scores\poster-001-rule-v1" `
-  --strategy "strategies\movie60\v3_2_2\bundle.yaml"
+  --strategy "strategies\movie60\v3_3\bundle.yaml"
 ```
 
 不要添加 `--agent-backend-url`、`--agent-model` 或 `--agent-api-key-env`。
@@ -231,7 +231,7 @@ Get-ChildItem runs\poster-001-square-v1\evaluations\poster-001-rule-v2\metrics
 
 - 分别对原图和候选运行同一检测栈；
 - 比较 OCR、人物、人脸、商品、Logo 候选、局部特征、结构和构图；
-- 应用 v3.2.2 的动态权重、软调整和 C/D 门禁；
+- 应用 v3.3.0 的动态权重、证据罚分和 C/D 门禁；
 - 输出 `report.json`、`report.md`、`overlay.png`、输入副本和策略快照；
 - 在 `report.json` 中记录 `agent_review_status: not_requested`。
 
@@ -252,7 +252,7 @@ Get-ChildItem runs\poster-001-square-v1\evaluations\poster-001-rule-v2\metrics
 .\.venv\Scripts\retarget-engine.exe score standalone `
   "D:\images\candidate.jpg" `
   --output-dir "local_data\scores\candidate-only-v1" `
-  --strategy "strategies\movie60\v3_2_2\bundle.yaml"
+  --strategy "strategies\movie60\v3_3\bundle.yaml"
 ```
 
 没有原图就无法判断“文字是否丢失”“人物数量是否减少”或“语义是否变化”，因此该模式只输出清晰度、边缘、亮度、对比度、空白检查和检测框，不生成内容保留结论，也不生成 Rule A/B/C/D。不要把它和 `score reference` 混用。
@@ -272,7 +272,7 @@ Get-ChildItem -LiteralPath $inputRoot -File |
     PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
       -InputImage $_.FullName `
       -CaseId $caseId `
-      -Strategy "strategies\movie60\v3_2_2\bundle.yaml"
+      -Strategy "strategies\movie60\v3_3\bundle.yaml"
     if ($LASTEXITCODE -ne 0) { throw "Failed: $($_.FullName)" }
     $index += 1
   }
@@ -362,7 +362,7 @@ run_id: my-batch-square-v1
 .\.venv\Scripts\retarget-engine.exe evaluate `
   runs\my-batch-square-v1 `
   --evaluation-id my-batch-rule-v1 `
-  --strategy strategies\movie60\v3_2_2\bundle.yaml
+  --strategy strategies\movie60\v3_3\bundle.yaml
 .\.venv\Scripts\retarget-engine.exe audit runs\my-batch-square-v1
 ```
 
@@ -375,8 +375,8 @@ run_id: my-batch-square-v1
 ```powershell
 .\.venv\Scripts\retarget-engine.exe evaluate `
   runs\my-batch-square-v1 `
-  --evaluation-id my-batch-rule-v3-2-2 `
-  --strategy strategies\movie60\v3_2_2\bundle.yaml
+  --evaluation-id my-batch-rule-v3-3 `
+  --strategy strategies\movie60\v3_3\bundle.yaml
 ```
 
 旧 Evaluation 保留。新 Evaluation 会写入自己的策略快照，可直接比较两版 Rule。
@@ -388,15 +388,15 @@ Rule 完成后，只有在已部署内部 OpenAI-compatible 视觉端点时才�
 ```powershell
 .\.venv\Scripts\retarget-engine.exe agent replay `
   runs\my-batch-square-v1 `
-  --evaluation-id my-batch-rule-v3-2-2 `
+  --evaluation-id my-batch-rule-v3-3 `
   --agent-run-id my-batch-agent-v1 `
   --mode always_on_agent `
   --backend-url "http://127.0.0.1:8000/v1" `
   --model "<内部模型ID>" `
-  --strategy strategies\movie60\v3_2_2\bundle.yaml
+  --strategy strategies\movie60\v3_3\bundle.yaml
 ```
 
-当前 v3.2.2 中 `agent_selection_mode` 是 `advisory_only`：Agent 生成中文视觉建议和挑战证据，但生产最终选择仍由 Rule 给出。
+当前 v3.3.0 中 `agent_selection_mode` 是 `advisory_only`：Agent 生成中文视觉建议和挑战证据，但生产最终选择仍由 Rule 给出。
 
 启动人工评审 UI：
 
@@ -418,7 +418,7 @@ Rule 完成后，只有在已部署内部 OpenAI-compatible 视觉端点时才�
 
 ```powershell
 .\.venv\Scripts\retarget-engine.exe strategy diff `
-  strategies\movie60\v3_2_2\bundle.yaml `
+  strategies\movie60\v3_3\bundle.yaml `
   strategies\movie60\v3_3_0\bundle.yaml
 ```
 
