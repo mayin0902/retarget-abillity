@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1 - 2026-08-21
+
+- Publish the verified Movie60 core, evidence and checksum assets together with the software
+  wheel in one immutable GitHub Release.
+- Resolve the default materialization tag and Movie60 asset generation from
+  `CURRENT_RELEASE.json`, while retaining the original `movie60-review-v3` pre-release as a
+  traceable legacy source.
+
 ## 0.7.0 - 2026-08-21
 
 - Freeze one authoritative Rule decision per Task during Evaluation; Agent Replay, result export

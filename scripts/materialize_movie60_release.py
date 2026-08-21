@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import shutil
 import subprocess
 import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
+
+CURRENT_RELEASE = Path(__file__).resolve().parents[1] / "CURRENT_RELEASE.json"
 
 
 def asset_names(release_version: str) -> tuple[str, str, str]:
@@ -23,6 +26,24 @@ def asset_names(release_version: str) -> tuple[str, str, str]:
         f"movie60-handoff-{release_version}-evidence.zip",
         "SHA256SUMS.txt",
     )
+
+
+def release_defaults(config_path: Path = CURRENT_RELEASE) -> tuple[str, str]:
+    """Return the one supported GitHub tag and asset generation from repository metadata."""
+
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("CURRENT_RELEASE.json must contain a JSON object")
+    tag = payload.get("github_release_tag")
+    release_version = payload.get("release_version")
+    if not isinstance(tag, str) or not tag.strip():
+        raise ValueError("CURRENT_RELEASE.json is missing github_release_tag")
+    if not isinstance(release_version, str):
+        raise ValueError("CURRENT_RELEASE.json is missing release_version")
+    expected_assets = list(asset_names(release_version))
+    if payload.get("release_asset_names") != expected_assets:
+        raise ValueError("CURRENT_RELEASE.json asset names do not match release_version")
+    return tag, release_version
 
 
 def _sha256(path: Path) -> str:
@@ -151,8 +172,14 @@ def main() -> None:
         description="Download, hash-check and safely materialize the private Movie60 release."
     )
     parser.add_argument("--repo", default="mayin0902/retarget-abillity")
-    parser.add_argument("--tag", default="movie60-review-v3")
-    parser.add_argument("--release-version", default="v3")
+    parser.add_argument(
+        "--tag",
+        help="GitHub Release tag; defaults to CURRENT_RELEASE.json.",
+    )
+    parser.add_argument(
+        "--release-version",
+        help="Movie60 asset generation; defaults to CURRENT_RELEASE.json.",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -164,12 +191,15 @@ def main() -> None:
         help="Use already-downloaded assets instead of GitHub (testing/offline handoff).",
     )
     args = parser.parse_args()
+    default_tag, default_release_version = release_defaults()
+    tag = args.tag or default_tag
+    release_version = args.release_version or default_release_version
     output = materialize_release(
         args.repo,
-        args.tag,
+        tag,
         args.output_dir,
         asset_dir=args.asset_dir,
-        release_version=args.release_version,
+        release_version=release_version,
     )
     print(output)
 
