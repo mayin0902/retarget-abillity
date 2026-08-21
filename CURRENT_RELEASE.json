@@ -1,0 +1,15 @@
+{
+  "release_id": "movie60-review-v3",
+  "dataset": "movie-visual-60-v1@1.0.0",
+  "run_id": "movie60-square-v1-20260818",
+  "evaluation_id": "movie60-human-aligned-v3-2-2-20260821",
+  "strategy": "movie60@3.2.2",
+  "strategy_sha256": "49a74b7132b0efe8cf4b014644db7a56d77b8820df1d21b4388d0a33e81ecd73",
+  "deployment_route": "rule_primary_agent_advisory",
+  "release_asset_root": "movie60-review-v3",
+  "release_asset_names": [
+    "movie60-review-v3-core.zip",
+    "movie60-review-v3-evidence.zip",
+    "SHA256SUMS.txt"
+  ]
+}

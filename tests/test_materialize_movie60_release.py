@@ -56,6 +56,25 @@ def test_v2_asset_names_are_independent_from_immutable_v1(tmp_path: Path) -> Non
     )
 
 
+def test_v3_root_and_asset_names_are_independent(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    core = assets / "movie60-review-v3-core.zip"
+    evidence = assets / "movie60-review-v3-evidence.zip"
+    with zipfile.ZipFile(core, "w") as archive:
+        archive.writestr("movie60-review-v3/README.md", b"core")
+    with zipfile.ZipFile(evidence, "w") as archive:
+        archive.writestr("movie60-review-v3/evidence.txt", b"evidence")
+    sums = "".join(f"{_digest(path)}  {path.name}\n" for path in (core, evidence))
+    (assets / "SHA256SUMS.txt").write_text(sums, encoding="ascii")
+
+    output = tmp_path / "movie60-review-v3"
+    verify_and_materialize(assets, output, release_version="v3")
+
+    assert (output / "README.md").read_bytes() == b"core"
+    assert (output / "evidence.txt").read_bytes() == b"evidence"
+
+
 def test_materializer_rejects_hash_mismatch(tmp_path: Path) -> None:
     assets = _assets(tmp_path)
     (assets / "movie60-handoff-v1-core.zip").write_bytes(b"corrupt")
@@ -92,6 +111,4 @@ def test_existing_output_refuses_before_release_download(
         unexpected_download,
     )
     with pytest.raises(FileExistsError):
-        materialize_movie60_release.materialize_release(
-            "owner/repo", "tag", output
-        )
+        materialize_movie60_release.materialize_release("owner/repo", "tag", output)

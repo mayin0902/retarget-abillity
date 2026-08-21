@@ -254,6 +254,16 @@ function render() {
   state.dirty = false;
   renderProgress();
   renderNavigation();
+  const release = state.workspace.release || {};
+  const versionText = [
+    release.release_id,
+    release.strategy_version ? `Strategy ${release.strategy_version}` : null,
+    release.evaluation_id ? `Evaluation ${release.evaluation_id}` : null,
+  ].filter(Boolean).join(" · ");
+  if (versionText) {
+    document.title = `${versionText} · 人工评审`;
+    el("release-version").textContent = versionText;
+  }
   el("mode-description").textContent = state.mode === "all60"
     ? "完整60张：逐张校对七种候选，共420张；同时核对Rule与Agent判分。"
     : "重点20张：分别评价Rule、Agent和成功回图的AIGC。";

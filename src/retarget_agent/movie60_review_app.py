@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import mimetypes
 import threading
 from dataclasses import dataclass
@@ -105,6 +106,12 @@ class Movie60ReviewWorkspace:
         )
         if not all(path.is_file() for path in required):
             raise ValueError("the configured directory is not a complete Movie60 review workspace")
+        version_path = self.root / "VERSION.json"
+        self.version = (
+            json.loads(version_path.read_text(encoding="utf-8"))
+            if version_path.is_file()
+            else {"release_id": "legacy-workspace", "strategy_version": "legacy"}
+        )
         self._lock = threading.Lock()
         self._media: dict[tuple[str, str, str], Movie60Media] = {}
         self._index_media()
@@ -161,6 +168,9 @@ class Movie60ReviewWorkspace:
             "all60_candidate_count": len(_read_csv(self.all60_dir / "candidate-review.csv")),
             "focus20_task_count": len(_read_csv(self.focus20_dir / "codex.csv")),
             "media_count": len(self._media),
+            "release_id": self.version.get("release_id"),
+            "strategy_version": self.version.get("strategy_version"),
+            "evaluation_id": self.version.get("evaluation_id"),
         }
 
     @staticmethod
@@ -238,9 +248,7 @@ class Movie60ReviewWorkspace:
                             if value
                         ],
                         "agent_reason_codes_raw": [
-                            value
-                            for value in candidate["agent_reason_codes"].split(";")
-                            if value
+                            value for value in candidate["agent_reason_codes"].split(";") if value
                         ],
                         "review_rationale": None,
                         "final_selected": candidate["final_selected"] == "true",
@@ -332,6 +340,7 @@ class Movie60ReviewWorkspace:
         tasks = self._all60_tasks() if mode == "all60" else self._focus20_tasks()
         return {
             "mode": mode,
+            "release": self.version,
             "task_count": len(tasks),
             "completed_task_count": sum(self._complete(task) for task in tasks),
             "tasks": tasks,

@@ -8,16 +8,16 @@ import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-ASSETS = (
-    "movie60-handoff-v1-core.zip",
-    "movie60-handoff-v1-evidence.zip",
-    "SHA256SUMS.txt",
-)
-
 
 def asset_names(release_version: str) -> tuple[str, str, str]:
     if not release_version.startswith("v") or not release_version[1:].isdigit():
-        raise ValueError("release_version must look like v1 or v2")
+        raise ValueError("release_version must look like v1, v2 or v3")
+    if release_version == "v3":
+        return (
+            "movie60-review-v3-core.zip",
+            "movie60-review-v3-evidence.zip",
+            "SHA256SUMS.txt",
+        )
     return (
         f"movie60-handoff-{release_version}-core.zip",
         f"movie60-handoff-{release_version}-evidence.zip",
@@ -87,8 +87,9 @@ def verify_and_materialize(
                     raise ValueError(f"ZIP CRC failure in {name}: {bad}")
                 archive.extractall(extracted, members=_safe_members(archive))
         roots = [item for item in extracted.iterdir() if item.is_dir()]
-        if len(roots) != 1 or roots[0].name != "movie60-review":
-            raise ValueError("release archives must merge into one movie60-review directory")
+        expected_root = "movie60-review-v3" if release_version == "v3" else "movie60-review"
+        if len(roots) != 1 or roots[0].name != expected_root:
+            raise ValueError(f"release archives must merge into one {expected_root} directory")
         shutil.move(str(roots[0]), output_dir)
     return output_dir
 
