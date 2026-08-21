@@ -4,6 +4,10 @@
 
 主流程：共享保护分析 → 七种传统候选 → 候选逐张重检与 Rule 排名 → 视觉 Agent 挑战 → 高清 Rule-vs-challenger 门禁 → 可选 AIGC → 人工反馈。
 
+当前唯一推荐交付是 `movie60-review-v3`。版本事实见
+[`CURRENT_RELEASE.json`](CURRENT_RELEASE.json)，构建、下载和 Windows 双击启动见
+[Movie60 Review v3 使用说明](docs/MOVIE60_REVIEW_V3_RELEASE.md)。旧版本仅用于审计。
+
 ## 当前能力
 
 - direct warp、crop、受限/完整 seam、受限/完整 mesh、seam+scale；
@@ -13,6 +17,9 @@
 - 单图有参考评分、无参考技术检查、批量 Run、Agent Replay 和本地人工评审 UI。
 
 ## 从零开始
+
+安装前先由负责人填写
+[公司 pip 镜像配置留白](docs/runbooks/COMPANY_PIP_MIRROR_TEMPLATE.md)，仓库不会自动回退公网源。
 
 ```powershell
 git clone <私有仓库URL> retarget-abillity
@@ -41,8 +48,11 @@ PowerShell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
 
 ## 文档
 
-- [交接大纲](docs/HANDOFF_OUTLINE.md)
-- [开发交接详细讲义](docs/HANDOFF_DETAILED_GUIDE.md)
+- [开发操作手册：Clone、安装、单图、批量与 Rule-only](docs/DEVELOPER_OPERATION_MANUAL.md)
+- [开发操作手册工程详解版](docs/DEVELOPER_OPERATION_MANUAL_DETAILED.md)
+- [算法原理：重定向、检测比较、评分与 Agent](docs/DEVELOPER_ALGORITHM_PRINCIPLES.md)
+- [算法变量与公式工程参考](docs/DEVELOPER_ALGORITHM_REFERENCE.md)
+- [Movie60 当前数据、评分和 Agent 路线状态](docs/reviews/movie60-v3/CURRENT_DATA_AND_ROUTE_STATUS.md)
 - [插件与策略迭代](docs/PLUGIN_STRATEGY_GUIDE.md)
 - [七种算法](docs/ALGORITHMS.md)
 - [人工评审](docs/REVIEW_GUIDE.md)

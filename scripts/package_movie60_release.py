@@ -311,7 +311,12 @@ def _manifest(entries: list[Entry]) -> bytes:
 
 
 def _write_zip(
-    path: Path, entries: list[Entry], generated: dict[Path, bytes], manifest_name: str
+    path: Path,
+    entries: list[Entry],
+    generated: dict[Path, bytes],
+    manifest_name: str,
+    *,
+    package_root: Path = PACKAGE_ROOT,
 ) -> None:
     if path.exists():
         raise FileExistsError(path)
@@ -332,7 +337,7 @@ def _write_zip(
         for archive_path, payload in generated.items():
             archive.writestr(_zip_info(archive_path, zipfile.ZIP_DEFLATED), payload)
         archive.writestr(
-            _zip_info(PACKAGE_ROOT / manifest_name, zipfile.ZIP_DEFLATED),
+            _zip_info(package_root / manifest_name, zipfile.ZIP_DEFLATED),
             _manifest(entries),
         )
     if path.stat().st_size >= MAX_RELEASE_ASSET_BYTES:
