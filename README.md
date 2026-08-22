@@ -5,8 +5,8 @@
 
 ## 第一次使用
 
-安装前先向项目负责人取得公司 pip 镜像地址，并按
-[QUICKSTART](docs/QUICKSTART.md#0-先确认公司-pip-镜像)填写；仓库不会保存公司凭据。
+安装前先让公司开发同学完成用户级 pip 镜像配置。本项目不保存、不读取公司镜像地址；详见
+[QUICKSTART](docs/QUICKSTART.md#0-先确认公司-pip-镜像)。
 
 ```powershell
 git clone <private-repository-url> retarget-abillity
@@ -21,22 +21,29 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1 -PythonVe
 ## 最常用命令
 
 ```powershell
-# 一张图：生成七候选并按 current Rule 评分
-.\.venv\Scripts\retarget-engine.exe run image D:\images\poster.jpg --target 1536x1536
+# 先物化 Movie60，然后用一张真实简体中文海报跑七候选和 current Rule
+powershell -ExecutionPolicy Bypass -File scripts\materialize_review.ps1
+.\.venv\Scripts\retarget-engine.exe run image `
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg" `
+  --scene movie_poster --target 1536x1536
 
-# 一批图
-.\.venv\Scripts\retarget-engine.exe run batch D:\images\batch01 --target 1920x1080
+# 一批同场景图片；未传 --target 时读取 configs/default.yaml
+.\.venv\Scripts\retarget-engine.exe run batch D:\authorized-images\posters `
+  --scene movie_poster
 
 # 打开指定 Run 或最近 Run
 .\.venv\Scripts\retarget-engine.exe review open runs\<run-id>
 .\.venv\Scripts\retarget-engine.exe review latest
 
 # 只比较一张原图和一张候选图
-.\.venv\Scripts\retarget-engine.exe score reference source.jpg candidate.jpg
+.\.venv\Scripts\retarget-engine.exe score reference `
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg" `
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\candidates\crop.png"
 ```
 
 默认只运行本地 Rule，不调用 Agent、AIGC 或付费 API。Agent 必须通过
-`--agent-profile configs\agent-profile.private.yaml` 显式启用。
+`--agent-profile configs\agent-profile.private.yaml` 显式启用。新图应显式传 `--scene`；省略时
+会冻结为 `unspecified` 并提示场景化 Strategy 门禁不会生效。
 
 ## 文档
 

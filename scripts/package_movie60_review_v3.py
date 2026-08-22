@@ -7,9 +7,9 @@ from pathlib import Path
 from retarget_agent.movie60_release import validate_movie60_review_v3
 
 if __package__:
-    from .package_movie60_release import Entry, _write_zip
+    from .release_packaging import Entry, write_release_zip
 else:
-    from package_movie60_release import Entry, _write_zip
+    from release_packaging import Entry, write_release_zip
 
 PACKAGE_ROOT = Path("movie60-review-v3")
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
@@ -74,14 +74,14 @@ def package_v3(workspace: Path, output_dir: Path) -> list[Path]:
     core, evidence = collect_v3(workspace)
     core_zip = output_dir / "movie60-review-v3-core.zip"
     evidence_zip = output_dir / "movie60-review-v3-evidence.zip"
-    _write_zip(
+    write_release_zip(
         core_zip,
         core,
         {},
         "core-manifest.csv",
         package_root=PACKAGE_ROOT,
     )
-    _write_zip(
+    write_release_zip(
         evidence_zip,
         evidence,
         {},

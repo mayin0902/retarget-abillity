@@ -200,7 +200,40 @@ D:\review-case\
 通过。Movie60 数据 Release 不因纯代码升级自动覆盖；需要重打包时创建新标签并校验资产，
 保留旧标签。
 
-## 13. 常见故障
+### 12.1 当前与旧打包入口
+
+- 当前唯一推荐入口：`scripts/package_movie60_review_v3.py`；
+- 公共确定性 ZIP/SHA 工具：`scripts/release_packaging.py`；
+- `scripts/package_movie60_release.py` 只用于复现历史 v1/v2，命令帮助会明确标为 legacy。
+
+普通交接和使用不需要执行任何打包脚本。下载/物化使用
+`scripts/materialize_review.ps1`，它会优先检查
+`local_data/release_assets/<CURRENT_RELEASE tag>/` 的三个原始资产。
+
+## 13. 公司网络模型下载决策
+
+**DEC-20260821-01｜公司网络下固定模型下载 SSL 降级策略**
+
+1. 正常请求显式使用 `verify=True`；
+2. 只有捕获 `requests.exceptions.SSLError` 才允许重试；
+3. 重试只允许 `materialize_analyzer_models.py` 的 `ALLOWED_HOSTS`，每次重定向前重新检查
+   HTTPS 与 Host；
+4. manifest 必须同时有固定 `sha256`、`expected_bytes` 和普通文件名；
+5. 降级请求使用 `verify=False`，打印明确 warning，只抑制该次请求的
+   `InsecureRequestWarning`；
+6. 下载超过 pin、字节数不等或 SHA-256 不等都会删除 `.part` 并使 Bootstrap 失败；
+7. 已有且 pin 正确的模型直接复用，不访问网络。
+
+准确的安全口径是：TLS 服务端身份校验在降级请求中关闭，但下载产物仍通过固定 SHA-256
+和字节数校验完整性与预期内容。这个例外不能用于没有内容 pin 的 pip、普通 API、Agent、
+AIGC 或任意用户 URL。
+
+普通 Bootstrap 使用
+`datasets/analyzer_models_company_cpu_v2/download_manifest.csv`，其中只保留当前正式路线需要
+预下载的 YuNet。`datasets/analyzer_models_v1/model_manifest.csv` 中 PPOCRv3、CRNN、YOLOX
+仅供显式历史回放，不再由正常 Bootstrap 下载。
+
+## 14. 常见故障
 
 - `.venv` 从其他电脑复制：删除或移走后重新 Bootstrap；
 - 新 Run UI 缺候选：检查 `candidate.json`；失败候选应显示 N/A，不能被隐藏；
@@ -208,4 +241,7 @@ D:\review-case\
 - Strategy 快照缺 Knowledge：说明旧 Loader 或旧 Run，只能标为历史证据；
 - Agent 显示未运行：确认显式 Profile、模型服务、环境变量和 Agent Run ID；
 - 端口占用：`review open <path> --port 8766`；
-- 模型下载受限：由公司镜像/缓存负责人提供，不要改成未审计的网络自动下载。
+- 固定 YuNet 下载出现证书错误：脚本会按 DEC-20260821-01 自动降级并验证内容 pin；非
+  `SSLError`、非 allowlist Host 或 Hash/字节数不符仍会直接失败；
+- PP-OCRv6/D-FINE 第三方模型缓存受限：联系公司模型缓存负责人；不要把固定资源的 SSL
+  例外扩展到无 pin 的第三方请求。

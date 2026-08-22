@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 
 import pytest
+import yaml
 from PIL import Image, ImageDraw
 
 from retarget_agent.config import (
@@ -11,10 +13,14 @@ from retarget_agent.config import (
     RunConfig,
     load_run_config,
 )
-from retarget_agent.defaults import current_strategy_path
+from retarget_agent.defaults import current_strategy_path, load_public_defaults
 from retarget_agent.rule_selection import materialize_selected_results
 from retarget_agent.service import RetargetApplicationService
-from retarget_agent.simple_workflow import materialize_image_dataset, parse_target
+from retarget_agent.simple_workflow import (
+    materialize_image_dataset,
+    parse_scene,
+    parse_target,
+)
 
 ASPECT_CASES = (
     ("1536x1536", (96, 96)),
@@ -29,6 +35,56 @@ def test_run_config_defaults_to_seven_method_profile() -> None:
     config = RunConfig(dataset_root="dataset", run_id="default-seven")
     assert config.method_profile == "retarget_default_v1"
     assert config.methods == RETARGET_DEFAULT_METHODS
+
+
+def test_public_defaults_are_validated_from_the_single_yaml_source() -> None:
+    _root, defaults = load_public_defaults()
+
+    assert defaults.default_target == "1536x1536"
+    assert defaults.method_profile == "retarget_default_v1"
+    assert defaults.analysis_profile == "company_cpu_v2"
+    assert defaults.review.host == "127.0.0.1"
+    assert defaults.review.port == 8765
+
+
+@pytest.mark.parametrize(
+    "scene",
+    ["movie_poster", "film_still", "video_cover", "person", "product", "unspecified"],
+)
+def test_public_scene_categories_are_explicit(scene: str) -> None:
+    assert parse_scene(scene) == scene
+
+
+def test_unknown_scene_is_rejected() -> None:
+    with pytest.raises(ValueError, match="scene must be one of"):
+        parse_scene("auto_magic")
+
+
+def test_materialized_scene_is_frozen_into_source_and_dataset_contract(tmp_path: Path) -> None:
+    source = tmp_path / "poster.png"
+    Image.new("RGB", (120, 80), "#334455").save(source)
+    dataset = tmp_path / "dataset"
+
+    config_path = materialize_image_dataset(
+        [source],
+        dataset,
+        run_id="scene-poster",
+        target=(96, 96),
+        runs_root=tmp_path / "runs",
+        detector_mode="disabled",
+        scene_category="movie_poster",
+        method_profile="retarget_default_v1",
+        detector_suite_plugin="company_cpu_v2",
+    )
+
+    with (dataset / "sources.csv").open(encoding="utf-8", newline="") as handle:
+        sources = list(csv.DictReader(handle))
+    descriptor = yaml.safe_load((dataset / "dataset.yaml").read_text(encoding="utf-8"))
+    config = load_run_config(config_path)
+    assert sources[0]["scene_category"] == "movie_poster"
+    assert descriptor["expected_scene_counts"] == {"movie_poster": 1}
+    assert config.method_profile == "retarget_default_v1"
+    assert config.analysis.detector_suite_plugin == "company_cpu_v2"
 
 
 @pytest.mark.parametrize(("target_text", "_smoke_size"), ASPECT_CASES)

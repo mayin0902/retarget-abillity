@@ -2,7 +2,9 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$InputImage,
-    [string]$Target = '1536x1536'
+    [string]$Target,
+    [ValidateSet('movie_poster', 'film_still', 'video_cover', 'person', 'product', 'unspecified')]
+    [string]$Scene = 'unspecified'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,7 +31,11 @@ if (-not (Test-Path -LiteralPath $Cli -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $InputImage -PathType Leaf)) {
     throw "Input image does not exist: $InputImage"
 }
-Invoke-Checked $Cli @('run', 'image', $InputImage, '--target', $Target) 'Image workflow'
+$WorkflowArgs = @('run', 'image', $InputImage, '--scene', $Scene)
+if ($Target) {
+    $WorkflowArgs += @('--target', $Target)
+}
+Invoke-Checked $Cli $WorkflowArgs 'Image workflow'
 
 Write-Host ''
 Write-Host 'Single-image Rule pipeline completed.' -ForegroundColor Green

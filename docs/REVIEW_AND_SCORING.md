@@ -136,7 +136,9 @@ A+B 对 C+D 二分类一致率 78.57%；Agent 在 18 个 Top1 上二分类一致
 有原图时：
 
 ```powershell
-.\.venv\Scripts\retarget-engine.exe score reference source.jpg candidate.jpg
+.\.venv\Scripts\retarget-engine.exe score reference `
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg" `
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\candidates\crop.png"
 ```
 
 输出目录包含：
@@ -165,8 +167,8 @@ workspace/scores/reference-<timestamp>/
 先运行：
 
 ```powershell
-.\.venv\Scripts\retarget-engine.exe run batch D:\images\batch01 `
-  --target 1536x1536
+.\.venv\Scripts\retarget-engine.exe run batch local_data\demo-batch `
+  --target 1536x1536 --scene movie_poster
 ```
 
 再打开终端返回的 `review_command`。必须确认：Task 数等于输入图数；每个 Task 的方法分母

@@ -13,7 +13,7 @@ from retarget_agent.movie60_release import (
     validate_movie60_review_v3,
 )
 from scripts.materialize_movie60_release import asset_names
-from scripts.package_movie60_release import Entry, _write_zip
+from scripts.release_packaging import Entry, write_release_zip
 
 
 def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:
@@ -162,7 +162,7 @@ def test_zip_writer_uses_explicit_v3_package_root(tmp_path: Path) -> None:
     source = tmp_path / "source.txt"
     source.write_text("payload", encoding="utf-8")
     archive_path = tmp_path / "asset.zip"
-    _write_zip(
+    write_release_zip(
         archive_path,
         [Entry(source, Path("movie60-review-v3/source.txt"), "core")],
         {},

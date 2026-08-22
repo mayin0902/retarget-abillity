@@ -757,7 +757,8 @@ class CompanyCpuProtectionDetectorSuite:
         face_path = root / MODEL_FILES["face_yunet"]
         if not face_path.is_file():
             raise FileNotFoundError(
-                f"missing YuNet model: {face_path}; run scripts/materialize_analyzer_models.py"
+                f"missing YuNet model: {face_path}; run scripts/bootstrap_windows.ps1 "
+                "or materialize the current analyzer manifest"
             )
         self.detectors = (
             PaddleOcrV6SmallDetector(),

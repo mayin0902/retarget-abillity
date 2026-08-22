@@ -237,43 +237,78 @@ def run_generate(
 @run_app.command("image")
 def run_image_command(
     input_image: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
-    target: Annotated[str, typer.Option("--target")] = "1536x1536",
+    target: Annotated[
+        str | None,
+        typer.Option("--target", help="WIDTHxHEIGHT; defaults to configs/default.yaml."),
+    ] = None,
+    scene: Annotated[
+        str,
+        typer.Option(
+            "--scene",
+            help=(
+                "movie_poster, film_still, video_cover, person, product, or unspecified."
+            ),
+        ),
+    ] = "unspecified",
     agent_profile: Annotated[
         Path | None,
         typer.Option("--agent-profile", exists=True, dir_okay=False),
     ] = None,
 ) -> None:
     """Run current Rule for one image; optionally run Agent with a private profile."""
-    from .simple_workflow import run_image
+    from .simple_workflow import UNSPECIFIED_SCENE_WARNING, run_image
 
-    typer.echo(
-        json.dumps(
-            run_image(input_image, target=target, agent_profile=agent_profile),
-            ensure_ascii=False,
-            indent=2,
-        )
+    if scene.strip().lower() == "unspecified":
+        typer.echo(f"Warning: {UNSPECIFIED_SCENE_WARNING}", err=True)
+    result = run_image(
+        input_image,
+        target=target,
+        scene=scene,
+        agent_profile=agent_profile,
     )
+    for warning in result.get("warnings", []):
+        if warning != UNSPECIFIED_SCENE_WARNING:
+            typer.echo(f"Warning: {warning}", err=True)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @run_app.command("batch")
 def run_batch_command(
     input_dir: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
-    target: Annotated[str, typer.Option("--target")] = "1536x1536",
+    target: Annotated[
+        str | None,
+        typer.Option("--target", help="WIDTHxHEIGHT; defaults to configs/default.yaml."),
+    ] = None,
+    scene: Annotated[
+        str,
+        typer.Option(
+            "--scene",
+            help=(
+                "Apply one scene label to the batch: movie_poster, film_still, "
+                "video_cover, person, product, or unspecified."
+            ),
+        ),
+    ] = "unspecified",
     agent_profile: Annotated[
         Path | None,
         typer.Option("--agent-profile", exists=True, dir_okay=False),
     ] = None,
 ) -> None:
     """Run current Rule for a folder; optionally run Agent with a private profile."""
-    from .simple_workflow import run_batch
+    from .simple_workflow import UNSPECIFIED_SCENE_WARNING, run_batch
 
-    typer.echo(
-        json.dumps(
-            run_batch(input_dir, target=target, agent_profile=agent_profile),
-            ensure_ascii=False,
-            indent=2,
-        )
+    if scene.strip().lower() == "unspecified":
+        typer.echo(f"Warning: {UNSPECIFIED_SCENE_WARNING}", err=True)
+    result = run_batch(
+        input_dir,
+        target=target,
+        scene=scene,
+        agent_profile=agent_profile,
     )
+    for warning in result.get("warnings", []):
+        if warning != UNSPECIFIED_SCENE_WARNING:
+            typer.echo(f"Warning: {warning}", err=True)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command("report")
@@ -472,11 +507,11 @@ def generation_plan(
 @review_app.command("web")
 def review_web(
     run_dir: Annotated[Path, typer.Argument(exists=True, file_okay=False)],
-    host: Annotated[str, typer.Option("--host", help="Bind address.")] = "127.0.0.1",
+    host: Annotated[str | None, typer.Option("--host", help="Bind address.")] = None,
     port: Annotated[
-        int,
+        int | None,
         typer.Option("--port", min=1, max=65535, help="Local HTTP port."),
-    ] = 8765,
+    ] = None,
     agent_run_id: Annotated[
         str | None,
         typer.Option(
@@ -487,10 +522,13 @@ def review_web(
 ) -> None:
     """Deprecated alias for ``review open RUN_DIR``."""
     typer.echo("Deprecated: use 'retarget-engine review open RUN_DIR'.")
+    from .defaults import load_public_defaults
+
+    _root, defaults = load_public_defaults()
     _launch_unified_review(
         run_dir,
-        host=host,
-        port=port,
+        host=host or defaults.review.host,
+        port=port or defaults.review.port,
         evaluation_id=None,
         agent_run_id=agent_run_id,
         open_browser=True,
@@ -532,20 +570,20 @@ def _launch_unified_review(
 @review_app.command("open")
 def review_open(
     workspace: Annotated[Path | None, typer.Argument(exists=True, file_okay=False)] = None,
-    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
-    port: Annotated[int, typer.Option("--port", min=1, max=65535)] = 8765,
+    host: Annotated[str | None, typer.Option("--host")] = None,
+    port: Annotated[int | None, typer.Option("--port", min=1, max=65535)] = None,
     evaluation_id: Annotated[str | None, typer.Option("--evaluation-id")] = None,
     agent_run_id: Annotated[str | None, typer.Option("--agent-run-id")] = None,
     open_browser: Annotated[bool, typer.Option("--open-browser/--no-open-browser")] = True,
 ) -> None:
     """Open Movie60, a standard Run or an imported case in the same review UI."""
-    from .defaults import load_default_config
+    from .defaults import load_public_defaults
     from .review_workspace import latest_completed_run
 
+    root, defaults = load_public_defaults()
     if workspace is None:
-        root, defaults = load_default_config()
-        runs_root = root / str(defaults["review"]["runs_root"])
-        movie60 = root / str(defaults["review"]["movie60_workspace"])
+        runs_root = root / defaults.review.runs_root
+        movie60 = root / defaults.review.movie60_workspace
         try:
             workspace = latest_completed_run(runs_root)
         except FileNotFoundError:
@@ -556,8 +594,8 @@ def review_open(
             workspace = movie60
     _launch_unified_review(
         workspace,
-        host=host,
-        port=port,
+        host=host or defaults.review.host,
+        port=port or defaults.review.port,
         evaluation_id=evaluation_id,
         agent_run_id=agent_run_id,
         open_browser=open_browser,
@@ -567,19 +605,22 @@ def review_open(
 @review_app.command("latest")
 def review_latest(
     runs_root: Annotated[
-        Path,
-        typer.Option("--runs-root", exists=True, file_okay=False),
-    ] = Path("runs"),
-    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
-    port: Annotated[int, typer.Option("--port", min=1, max=65535)] = 8765,
+        Path | None,
+        typer.Option("--runs-root", file_okay=False),
+    ] = None,
+    host: Annotated[str | None, typer.Option("--host")] = None,
+    port: Annotated[int | None, typer.Option("--port", min=1, max=65535)] = None,
 ) -> None:
     """Open the most recently completed standard Run."""
+    from .defaults import load_public_defaults
     from .review_workspace import latest_completed_run
 
+    root, defaults = load_public_defaults()
+    resolved_runs = runs_root or root / defaults.review.runs_root
     _launch_unified_review(
-        latest_completed_run(runs_root),
-        host=host,
-        port=port,
+        latest_completed_run(resolved_runs),
+        host=host or defaults.review.host,
+        port=port or defaults.review.port,
         evaluation_id=None,
         agent_run_id=None,
         open_browser=True,

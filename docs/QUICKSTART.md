@@ -5,29 +5,15 @@
 
 ## 0. 先确认公司 pip 镜像
 
-安装前请向负责人取得公司镜像信息。这里故意留空，不要把内网地址、账号或 Token 提交到
-Git：
-
-```text
-公司 pip index-url：________________________________________
-公司 trusted-host（如需要）：_______________________________
-负责人/日期：_______________________________________________
-```
-
-先检查当前用户是否已有公司配置：
+安装前请让公司开发同学完成**用户级** pip 镜像配置。本项目不保存、不读取镜像地址、账号或
+Token。开发者只需要检查当前用户是否已经能看到公司配置：
 
 ```powershell
 py -3.12 -m pip config list
 ```
 
-没有时由负责人指导写入用户级配置，例如：
-
-```powershell
-py -3.12 -m pip config set global.index-url <公司镜像地址>
-# 只有公司明确要求时才设置 trusted-host。
-```
-
-这样项目内没有私有源，`pip`、Bootstrap 和本地 Code Agent 都会继承同一配置。
+如果看不到公司源，先停止安装并联系公司环境负责人。本仓库不提供、猜测或写入公司镜像
+命令。配置完成后，`pip`、Bootstrap 和本地 Code Agent 会继承同一用户级配置。
 
 ## 1. 新电脑前置条件
 
@@ -79,7 +65,8 @@ Bootstrap 依次完成：
 1. 在仓库内创建 `.venv`；
 2. 安装固定版本的构建工具和本项目；
 3. 安装 PP-OCRv6、D-FINE、YuNet 等公司 CPU 检测依赖；
-4. 物化并审计模型文件；
+4. 只从当前 manifest 物化 YuNet 固定资产，再由当前 detector profile 物化 PP-OCRv6 与
+   固定 revision 的 D-FINE；旧 PPOCRv3/CRNN/YOLOX 不在普通 Bootstrap 主路径；
 5. 校验历史与 current Strategy；
 6. 跑最小测试；
 7. 执行 `doctor`。
@@ -108,6 +95,18 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1 `
 
 如公司模型不完整，重新运行完整 Bootstrap；不要手工把权重提交 Git。
 
+### 公司网络下固定模型的 SSL 降级
+
+模型下载默认始终执行 HTTPS 证书校验。仅当固定模型资源捕获到
+`requests.exceptions.SSLError` 时，`materialize_analyzer_models.py` 才会打印明确 warning，
+对同一 allowlist Host 使用 `verify=False` 重试，并在落盘前强制核对 manifest 中的
+`expected_bytes` 与固定 SHA-256。重定向后的 Host 也必须在 allowlist；校验失败会删除 `.part`
+并终止 Bootstrap。
+
+这意味着降级请求关闭了 TLS 服务端身份验证，但下载产物仍通过固定 SHA-256 和字节数验证
+完整性与预期内容。该例外只能用于有固定 pin 的模型资产，不能复制到 pip、普通 API、Agent
+或 AIGC 请求。
+
 ## 5. 下载并打开 Movie60 评审数据
 
 首次物化：
@@ -123,6 +122,38 @@ Git 忽略目录 `local_data\movie60-review-current`。已有且校验通过时�
 下载。`v0.7.1` 起，Wheel、Movie60 core、完整 evidence 和校验文件位于同一个 Release；
 原 `movie60-review-v3` Pre-release 只保留作历史追溯。
 
+### Movie60 无法在线下载怎么办
+
+如果公司网络不能执行 `gh release download`：
+
+1. 在浏览器打开 `CURRENT_RELEASE.json` 中 `github_release_tag` 对应的私有 Release；
+2. 下载 `release_asset_names` 列出的三个文件。当前是：
+   - `movie60-review-v3-core.zip`
+   - `movie60-review-v3-evidence.zip`
+   - `SHA256SUMS.txt`
+3. **不要解压、不要改名**，放入：
+
+   ```text
+   local_data\release_assets\v0.7.1\
+   ```
+
+4. 再执行：
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\materialize_review.ps1
+   ```
+
+脚本会优先发现完整的本地三件套，不访问 GitHub；文件不齐才回到在线下载。只有两个 ZIP
+不够，必须同时有 `SHA256SUMS.txt`。
+
+```text
+local_data\release_assets\v0.7.1\
+= 浏览器下载的原始压缩包
+
+local_data\movie60-review-current\
+= 经过 SHA-256、ZIP CRC 和安全路径校验后，真正供 UI/示例使用的数据
+```
+
 显式打开 Movie60：
 
 ```powershell
@@ -132,10 +163,27 @@ Git 忽略目录 `local_data\movie60-review-current`。已有且校验通过时�
 
 ## 6. 完整运行一张图片
 
+先完成上一节的 Movie60 物化，再直接运行真实简体中文海报：
+
 ```powershell
 .\.venv\Scripts\retarget-engine.exe run image `
-  "D:\images\poster.jpg" --target 1536x1536
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg" `
+  --target 1536x1536 `
+  --scene movie_poster
 ```
+
+可替换为以下真实场景源图：
+
+```text
+海报：all60\tasks\poster_001__square-1536\00_source.jpg
+人物：all60\tasks\person_001__square-1536\00_source.jpg
+剧照：all60\tasks\still_001__square-1536\00_source.jpg
+视频封面：all60\tasks\video_cover_001__square-1536\00_source.jpg
+```
+
+`--scene` 支持 `movie_poster`、`film_still`、`video_cover`、`person`、`product` 和
+`unspecified`。没传时会明确警告：新图没有场景类型，3.3 的场景化门禁不会触发。不要用
+`unspecified` 冒充已执行海报/人物专用 Rule。
 
 `--target` 是实际输出像素，格式固定为 `WIDTHxHEIGHT`。长期测试覆盖：
 
@@ -146,6 +194,14 @@ Git 忽略目录 `local_data\movie60-review-current`。已有且校验通过时�
 1200x900   4:3
 900x1200   3:4
 ```
+
+这些 Smoke 证明 Generation、Rule、结果落盘和 UI 的工程链路支持多种尺寸；当前
+`movie60@3.3.0` 的人工阈值证据仍主要来自 Movie60 1:1。不要把“代码能跑 16:9/9:16”解释为
+这些比例的 A/B/C/D 已完成人工校准。
+
+不传 `--target` 时读取 `configs/default.yaml` 的 `default_target`。方法 profile、检测 profile、
+Run 根目录和本地 UI host/port 也从同一文件读取；唯一 active Strategy 仍只由
+`strategies/registry.yaml` 决定。
 
 一条命令内部完成：冻结输入 → 原图保护分析 → 七方法生成 → 每个成功候选重新检测 →
 current Rule 评分 → 冻结完整 Rule 排名 → 导出最终 Rule Top1。
@@ -166,16 +222,23 @@ PowerShell 包装入口等价：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_one_image.ps1 `
-  -InputImage "D:\images\poster.jpg" -Target "1536x1536"
+  -InputImage "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg" `
+  -Target "1536x1536" -Scene movie_poster
 ```
 
 ## 7. 批量运行
 
-输入目录只放本批 JPEG/PNG：
+批量入口只扫描输入目录顶层的 JPEG/PNG，并对整批应用同一个 `--scene`。真实 Smoke 可以先把
+Movie60 的四张源图复制到一个忽略目录：
 
 ```powershell
+New-Item -ItemType Directory -Force local_data\demo-batch | Out-Null
+Copy-Item local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg `
+  local_data\demo-batch\poster.jpg
+Copy-Item local_data\movie60-review-current\all60\tasks\poster_002__square-1536\00_source.jpg `
+  local_data\demo-batch\poster-2.jpg
 .\.venv\Scripts\retarget-engine.exe run batch `
-  "D:\images\batch01" --target 1080x1920
+  "local_data\demo-batch" --target 1080x1920 --scene movie_poster
 ```
 
 每张图对应一个 Task，每个 Task 的默认分母固定为七方法。结果位于：
@@ -207,14 +270,15 @@ runs/<run-id>/results/<evaluation-id>/<task-id>/result.json
 
 ```powershell
 .\.venv\Scripts\retarget-engine.exe score reference `
-  "D:\images\source.jpg" "D:\images\candidate.png"
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg" `
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\candidates\crop.png"
 ```
 
 只有候选图：
 
 ```powershell
 .\.venv\Scripts\retarget-engine.exe score standalone `
-  "D:\images\candidate.png"
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\candidates\crop.png"
 ```
 
 Reference 模式能比较内容保留；Standalone 只能报告清晰度、尺寸等无参考风险，不能证明
@@ -228,8 +292,10 @@ Reference 模式能比较内容保留；Standalone 只能报告清晰度、尺�
 Copy-Item configs\agent-profile.private.example.yaml `
   configs\agent-profile.private.yaml
 $env:RETARGET_AGENT_API_KEY = "<本次会话Token>"
-.\.venv\Scripts\retarget-engine.exe run image "poster.jpg" `
-  --target 1536x1536 --agent-profile configs\agent-profile.private.yaml
+.\.venv\Scripts\retarget-engine.exe run image `
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg" `
+  --target 1536x1536 --scene movie_poster `
+  --agent-profile configs\agent-profile.private.yaml
 ```
 
 Profile 与 Token 都不应提交。未传 `--agent-profile` 时 Agent 调用次数为 0；普通工作流也
@@ -241,5 +307,6 @@ Profile 与 Token 都不应提交。未传 `--agent-profile` 时 Agent 调用次
 - `.venv exists but has no Windows Python`：把损坏目录改名保留，再重新 Bootstrap；
 - `generation_with_company_models=false`：运行完整 Bootstrap；
 - UI 端口占用：传 `--port 8766`；
-- 私有 Release 下载失败：检查 `gh auth status` 和仓库 Release 权限；
+- 私有 Release 下载失败：检查 `gh auth status` 和仓库 Release 权限，或按第 5 节把完整三件套
+  放入 `local_data\release_assets\<github_release_tag>\`；
 - 新 Run 没有 Evaluation：用 `run image/batch` 完整入口，或按 `ADVANCED.md` 手工 evaluate。

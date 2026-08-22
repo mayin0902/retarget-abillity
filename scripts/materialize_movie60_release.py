@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -10,6 +11,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 CURRENT_RELEASE = Path(__file__).resolve().parents[1] / "CURRENT_RELEASE.json"
+SAFE_RELEASE_TAG = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 
 
 def asset_names(release_version: str) -> tuple[str, str, str]:
@@ -28,6 +30,13 @@ def asset_names(release_version: str) -> tuple[str, str, str]:
     )
 
 
+def _validate_release_tag(tag: str) -> str:
+    normalized = tag.strip()
+    if not SAFE_RELEASE_TAG.fullmatch(normalized) or normalized in {".", ".."}:
+        raise ValueError("GitHub Release tag must be one safe path segment")
+    return normalized
+
+
 def release_defaults(config_path: Path = CURRENT_RELEASE) -> tuple[str, str]:
     """Return the one supported GitHub tag and asset generation from repository metadata."""
 
@@ -43,7 +52,33 @@ def release_defaults(config_path: Path = CURRENT_RELEASE) -> tuple[str, str]:
     expected_assets = list(asset_names(release_version))
     if payload.get("release_asset_names") != expected_assets:
         raise ValueError("CURRENT_RELEASE.json asset names do not match release_version")
-    return tag, release_version
+    return _validate_release_tag(tag), release_version
+
+
+def default_asset_directory(
+    tag: str,
+    *,
+    repository_root: Path | None = None,
+) -> Path:
+    """Return the fixed browser-download directory for one GitHub Release tag."""
+
+    root = (repository_root or CURRENT_RELEASE.parent).resolve()
+    return root / "local_data" / "release_assets" / _validate_release_tag(tag)
+
+
+def discover_local_assets(
+    tag: str,
+    release_version: str,
+    *,
+    repository_root: Path | None = None,
+) -> tuple[Path, tuple[str, ...]]:
+    """Return the conventional directory and any required assets still missing."""
+
+    directory = default_asset_directory(tag, repository_root=repository_root)
+    missing = tuple(
+        name for name in asset_names(release_version) if not (directory / name).is_file()
+    )
+    return directory, missing
 
 
 def _sha256(path: Path) -> str:
@@ -192,13 +227,24 @@ def main() -> None:
     )
     args = parser.parse_args()
     default_tag, default_release_version = release_defaults()
-    tag = args.tag or default_tag
+    tag = _validate_release_tag(args.tag or default_tag)
     release_version = args.release_version or default_release_version
+    asset_dir = args.asset_dir
+    if asset_dir is None:
+        conventional, missing = discover_local_assets(tag, release_version)
+        if not missing:
+            asset_dir = conventional
+            print(f"Using verified local Release assets: {conventional}")
+        elif conventional.exists():
+            print(
+                "Local Release asset directory is incomplete; online download will be used. "
+                f"Missing: {', '.join(missing)}"
+            )
     output = materialize_release(
         args.repo,
         tag,
         args.output_dir,
-        asset_dir=args.asset_dir,
+        asset_dir=asset_dir,
         release_version=release_version,
     )
     print(output)

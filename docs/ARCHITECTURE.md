@@ -135,7 +135,7 @@ S_crop = Coverage_importance
 
 ### 5.3 Seam（受限）
 
-代码：`methods/legacy.py`。按梯度与保护图寻找低代价 seam，单轴最多移除配置的 24 条，剩余
+代码：`methods/seam_limited.py`。按梯度与保护图寻找低代价 seam，单轴最多移除配置的 24 条，剩余
 比例差用缩放完成。它速度较快、改动保守；大比例变化时更像“少量 seam + 全局缩放”。风险
 记录包括 seam 平均重要度和最终对齐各向异性。
 
@@ -156,7 +156,7 @@ E = normalized_Scharr_gradient
 
 ### 5.5 Mesh（受限）
 
-代码：`methods/legacy.py`。旧版保护网格以较保守的局部位移完成有限变形，并保留最低单元
+代码：`methods/mesh_legacy.py`。旧版保护网格以较保守的局部位移完成有限变形，并保留最低单元
 比例门禁。它常比 Warp 自然，但表达力有限；风险是局部宽窄不一致。
 
 ### 5.6 Mesh Full（完整）
@@ -213,6 +213,12 @@ Quality = 100 × weighted_mean(
 门禁只改变等级上限，不伪造连续分。最终文件中的 `base_quality_score`、`quality_score`、
 `critical_regressions` 和 `human_gate:*` 可追查每一步。
 
+### 6.1 多目标比例的证据边界
+
+1:1、16:9、9:16、4:3、3:4 Smoke 证明七方法生成、Rule、结果落盘和 UI 在工程上支持这些
+尺寸；`movie60@3.3.0` 的人工等级阈值仍主要依据 Movie60 1:1 校准。非 1:1 结果可以运行和
+人工查看，但不能仅凭工程 Smoke 宣称其 A/B/C/D 已完成人工泛化验证。
+
 ## 7. 正式 Rule 排名
 
 `rule_selection.py` 按 Strategy 声明顺序比较：技术有效、无硬失败、无关键回归、生成成功、
@@ -238,6 +244,16 @@ Agent 输入包含：原图/候选总览、每个候选的结构化 Rule 证据�
 
 当前生产语义仍是 `advisory_only`：Agent 可更主动提出挑战，但没有独立人评证据时不会静默
 覆盖 Rule。AIGC 也不会由普通工作流自动调用。
+
+### 8.1 新图场景怎样进入 Rule
+
+Movie60 Dataset 已冻结 `movie_poster`、`film_still`、`video_cover`、`person` 等场景。普通
+`run image/batch` 通过显式 `--scene` 把场景写入新 Dataset 的 `sources.csv`，Evaluation
+读取同一 `TaskSpec.source.scene_category` 后才会应用 3.3 中的场景化门禁。
+
+省略 `--scene` 会冻结为 `unspecified` 并打印 warning；这时通用分数和门禁仍工作，但
+`movie_poster + crop` 等场景规则不会触发。当前不引入自动场景分类模型，避免把未经验证的
+分类错误悄悄放大到 Rule。
 
 ## 9. 可插拔接缝
 

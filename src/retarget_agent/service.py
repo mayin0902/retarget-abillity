@@ -218,21 +218,23 @@ class RetargetApplicationService:
         self,
         run_dir: Path,
         *,
-        host: str = "127.0.0.1",
-        port: int = 8765,
+        host: str | None = None,
+        port: int | None = None,
         agent_run_id: str | None = None,
     ) -> None:
         """Run the local review web adapter against one frozen Generation Run."""
         import uvicorn
 
+        from .defaults import load_public_defaults
         from .web_app import create_review_app
 
         run_dir = run_dir.resolve()
         if not (run_dir / "run.json").is_file():
             raise ValueError(f"not a Generation Run directory: {run_dir}")
+        _root, defaults = load_public_defaults()
         uvicorn.run(
             create_review_app(run_dir, service=self, agent_run_id=agent_run_id),
-            host=host,
-            port=port,
+            host=host or defaults.review.host,
+            port=port or defaults.review.port,
             log_level="info",
         )

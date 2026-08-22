@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from scripts.package_movie60_release import Entry, _write_zip
+from scripts.release_packaging import Entry, write_release_zip
 
 
 def test_release_zip_is_independent_of_source_mtime(tmp_path: Path) -> None:
@@ -13,9 +13,21 @@ def test_release_zip_is_independent_of_source_mtime(tmp_path: Path) -> None:
     generated = {Path("movie60-review/generated.txt"): b"generated"}
 
     first = tmp_path / "first.zip"
-    _write_zip(first, entries, generated, "manifest.csv")
+    write_release_zip(
+        first,
+        entries,
+        generated,
+        "manifest.csv",
+        package_root=Path("movie60-review"),
+    )
     os.utime(source, (2_000_000_000, 2_000_000_000))
     second = tmp_path / "second.zip"
-    _write_zip(second, entries, generated, "manifest.csv")
+    write_release_zip(
+        second,
+        entries,
+        generated,
+        "manifest.csv",
+        package_root=Path("movie60-review"),
+    )
 
     assert first.read_bytes() == second.read_bytes()

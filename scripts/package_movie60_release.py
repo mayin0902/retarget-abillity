@@ -1,14 +1,21 @@
+"""Legacy Movie60 v1/v2 packager.
+
+The current and only recommended entry is ``package_movie60_review_v3.py``.  This
+module remains importable solely to reproduce historical v1/v2 assets.
+"""
+
 from __future__ import annotations
 
 import argparse
 import csv
 import hashlib
-import io
 import json
-import shutil
-import zipfile
-from dataclasses import dataclass
 from pathlib import Path
+
+if __package__:
+    from .release_packaging import Entry, write_release_zip
+else:
+    from release_packaging import Entry, write_release_zip
 
 METHODS = {
     "crop",
@@ -20,16 +27,7 @@ METHODS = {
     "seam_scale",
 }
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
-MAX_RELEASE_ASSET_BYTES = 2 * 1024**3
 PACKAGE_ROOT = Path("movie60-review")
-ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
-
-
-@dataclass(frozen=True)
-class Entry:
-    source: Path
-    archive_path: Path
-    group: str
 
 
 def _sha256(path: Path) -> str:
@@ -286,64 +284,6 @@ AIGC成功/失败记录以及人工评审表。商业素材仅限内部评测，
     }
 
 
-def _manifest(entries: list[Entry]) -> bytes:
-    output = io.StringIO(newline="")
-    writer = csv.writer(output)
-    writer.writerow(("archive_path", "group", "bytes", "sha256"))
-    for entry in sorted(entries, key=lambda item: item.archive_path.as_posix()):
-        writer.writerow(
-            (
-                entry.archive_path.as_posix(),
-                entry.group,
-                entry.source.stat().st_size,
-                _sha256(entry.source),
-            )
-        )
-    return output.getvalue().encode("utf-8-sig")
-
-
-def _write_zip(
-    path: Path,
-    entries: list[Entry],
-    generated: dict[Path, bytes],
-    manifest_name: str,
-    *,
-    package_root: Path = PACKAGE_ROOT,
-) -> None:
-    if path.exists():
-        raise FileExistsError(path)
-    with zipfile.ZipFile(path, "w", allowZip64=True) as archive:
-        for entry in entries:
-            compress = (
-                zipfile.ZIP_STORED
-                if entry.source.suffix.lower() in IMAGE_SUFFIXES
-                else zipfile.ZIP_DEFLATED
-            )
-            info = _zip_info(entry.archive_path, compress)
-            with entry.source.open("rb") as source, archive.open(
-                info,
-                "w",
-                force_zip64=True,
-            ) as destination:
-                shutil.copyfileobj(source, destination, length=1024 * 1024)
-        for archive_path, payload in generated.items():
-            archive.writestr(_zip_info(archive_path, zipfile.ZIP_DEFLATED), payload)
-        archive.writestr(
-            _zip_info(package_root / manifest_name, zipfile.ZIP_DEFLATED),
-            _manifest(entries),
-        )
-    if path.stat().st_size >= MAX_RELEASE_ASSET_BYTES:
-        raise ValueError(f"release asset exceeds GitHub 2 GiB limit: {path}")
-
-
-def _zip_info(path: Path, compress_type: int) -> zipfile.ZipInfo:
-    info = zipfile.ZipInfo(path.as_posix(), date_time=ZIP_TIMESTAMP)
-    info.compress_type = compress_type
-    info.create_system = 3
-    info.external_attr = 0o100644 << 16
-    return info
-
-
 def package(
     repository: Path,
     output_dir: Path,
@@ -369,8 +309,20 @@ def package(
     generated = _generated_files(workspace, release_version)
     core_zip = output_dir / f"movie60-handoff-{release_version}-core.zip"
     evidence_zip = output_dir / f"movie60-handoff-{release_version}-evidence.zip"
-    _write_zip(core_zip, core, generated, "core-manifest.csv")
-    _write_zip(evidence_zip, evidence, {}, "evidence-manifest.csv")
+    write_release_zip(
+        core_zip,
+        core,
+        generated,
+        "core-manifest.csv",
+        package_root=PACKAGE_ROOT,
+    )
+    write_release_zip(
+        evidence_zip,
+        evidence,
+        {},
+        "evidence-manifest.csv",
+        package_root=PACKAGE_ROOT,
+    )
 
     assets = [core_zip, evidence_zip]
     sums = "".join(f"{_sha256(path)}  {path.name}\n" for path in assets)
@@ -382,7 +334,10 @@ def package(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Package the single curated Movie60 handoff as two GitHub Release assets."
+        description=(
+            "LEGACY ONLY: reproduce Movie60 v1/v2 assets. "
+            "Use package_movie60_review_v3.py for the current package."
+        )
     )
     parser.add_argument("--repository", type=Path, default=Path.cwd())
     parser.add_argument(

@@ -104,6 +104,39 @@ def test_repository_current_release_points_to_unified_software_release() -> None
     assert materialize_movie60_release.release_defaults() == ("v0.7.1", "v3")
 
 
+def test_default_local_asset_directory_is_namespaced_by_release_tag(tmp_path: Path) -> None:
+    directory, missing = materialize_movie60_release.discover_local_assets(
+        "v0.7.1",
+        "v3",
+        repository_root=tmp_path,
+    )
+
+    assert directory == tmp_path / "local_data" / "release_assets" / "v0.7.1"
+    assert missing == materialize_movie60_release.asset_names("v3")
+
+    with pytest.raises(ValueError, match="safe path segment"):
+        materialize_movie60_release.default_asset_directory(
+            "../wrong-release",
+            repository_root=tmp_path,
+        )
+
+
+def test_complete_local_asset_directory_is_discovered_without_network(tmp_path: Path) -> None:
+    directory = tmp_path / "local_data" / "release_assets" / "v0.7.1"
+    directory.mkdir(parents=True)
+    for name in materialize_movie60_release.asset_names("v3"):
+        (directory / name).write_bytes(b"present")
+
+    discovered, missing = materialize_movie60_release.discover_local_assets(
+        "v0.7.1",
+        "v3",
+        repository_root=tmp_path,
+    )
+
+    assert discovered == directory
+    assert missing == ()
+
+
 def test_materializer_rejects_hash_mismatch(tmp_path: Path) -> None:
     assets = _assets(tmp_path)
     (assets / "movie60-handoff-v1-core.zip").write_bytes(b"corrupt")

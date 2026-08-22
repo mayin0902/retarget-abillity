@@ -32,7 +32,7 @@ $Required = @(
     'strategies\movie60\v2\bundle.yaml',
     'strategies\movie60\v3_2_2\bundle.yaml',
     'strategies\movie60\v3_3\bundle.yaml',
-    'datasets\analyzer_models_v1\model_manifest.csv'
+    'datasets\analyzer_models_company_cpu_v2\download_manifest.csv'
 )
 $Missing = $Required | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) }
 if ($Missing) {
@@ -72,7 +72,13 @@ Invoke-Checked $Python @('-m', 'pip', 'install', '--upgrade', 'pip==25.2', 'setu
 Invoke-Checked $Python @('-m', 'pip', 'install', '-c', 'requirements\constraints-py311-313.txt', '-e', '.[dev]') 'Project installation'
 if (-not $SkipCompanyModels) {
     Invoke-Checked $Python @('-m', 'pip', 'install', '-r', 'requirements\company-models-windows.txt') 'Company-model runtime installation'
-    Invoke-Checked $Python @('scripts\materialize_analyzer_models.py') 'Analyzer model materialization'
+    # The current profile needs only the pinned YuNet asset from this downloader.
+    # Legacy PPOCRv3/CRNN/YOLOX assets remain available for explicit historical replay.
+    Invoke-Checked $Python @(
+        'scripts\materialize_analyzer_models.py',
+        '--manifest',
+        'datasets\analyzer_models_company_cpu_v2\download_manifest.csv'
+    ) 'Current analyzer model materialization'
     Invoke-Checked $Python @('scripts\materialize_company_models.py') 'Company model materialization'
 }
 Invoke-Checked $Cli @('strategy', 'show', 'strategies\movie60\v1\bundle.yaml') 'v1 strategy validation'

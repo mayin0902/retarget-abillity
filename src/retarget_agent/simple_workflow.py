@@ -13,11 +13,22 @@ import yaml
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .config import METHOD_PROFILES, method_parameters_for_profile
-from .defaults import current_strategy_path, load_default_config
+from .defaults import current_strategy_path, load_public_defaults
 from .hashing import sha256_file
 from .service import RetargetApplicationService
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+SCENE_CATEGORIES = {
+    "movie_poster",
+    "film_still",
+    "video_cover",
+    "person",
+    "product",
+    "unspecified",
+}
+UNSPECIFIED_SCENE_WARNING = (
+    "Scene category not specified. Scene-specific Strategy gates will not be applied."
+)
 SOURCE_FIELDS = (
     "source_id",
     "image_path",
@@ -44,6 +55,17 @@ def parse_target(value: str) -> tuple[int, int]:
     if width > 16384 or height > 16384:
         raise ValueError("target width and height must not exceed 16384 pixels")
     return width, height
+
+
+def parse_scene(value: str) -> str:
+    """Validate the explicit scene label used by scene-specific Strategy gates."""
+
+    normalized = value.strip().lower()
+    if normalized not in SCENE_CATEGORIES:
+        raise ValueError(
+            "scene must be one of: " + ", ".join(sorted(SCENE_CATEGORIES))
+        )
+    return normalized
 
 
 def _slug(value: str) -> str:
@@ -77,9 +99,15 @@ def materialize_image_dataset(
     target: tuple[int, int],
     runs_root: Path,
     detector_mode: str = "required",
+    scene_category: str = "unspecified",
+    method_profile: str = "retarget_default_v1",
+    detector_suite_plugin: str = "company_cpu_v2",
 ) -> Path:
     """Freeze local input images and write one standard Dataset+RunConfig."""
     root = dataset_root.resolve()
+    scene_category = parse_scene(scene_category)
+    if method_profile not in METHOD_PROFILES:
+        raise ValueError(f"unknown method profile: {method_profile}")
     if root.exists():
         raise FileExistsError(f"dataset already exists: {root}")
     root.mkdir(parents=True)
@@ -113,7 +141,7 @@ def materialize_image_dataset(
                 "enabled": "true",
                 "source_kind": "user_authorized_local_real",
                 "license_status": "local_research_not_publicly_redistributable",
-                "scene_category": "unspecified",
+                "scene_category": scene_category,
                 "fixture_type": "",
                 "test_purpose": "",
             }
@@ -132,7 +160,7 @@ def materialize_image_dataset(
         "version": "1.0.0",
         "description": "Local developer workflow input; pixels are not redistributable by default.",
         "expected_source_count": len(source_rows),
-        "expected_scene_counts": {"unspecified": len(source_rows)},
+        "expected_scene_counts": {scene_category: len(source_rows)},
         "evaluation_canvas": f"{width}x{height}",
         "generation_originals_may_be_retained_at_2k": True,
         "silent_upsampling_forbidden": True,
@@ -155,20 +183,18 @@ def materialize_image_dataset(
         "run_id": run_id,
         "seed": 20260821,
         "device": "cpu",
-        "method_profile": "retarget_default_v1",
-        "methods": list(METHOD_PROFILES["retarget_default_v1"]),
+        "method_profile": method_profile,
+        "methods": list(METHOD_PROFILES[method_profile]),
         "analysis": {
             "gradient_weight": 0.40,
             "contrast_weight": 0.30,
             "center_weight": 0.30,
             "region_padding_ratio": 0.025,
             "detector_mode": detector_mode,
-            "detector_suite_plugin": (
-                "company_cpu_v2" if detector_mode != "disabled" else "legacy_opencv_v1"
-            ),
+            "detector_suite_plugin": detector_suite_plugin,
             "model_root": "models/analyzers",
         },
-        "method_parameters": method_parameters_for_profile("retarget_default_v1"),
+        "method_parameters": method_parameters_for_profile(method_profile),
         "selector": {"selector_id": "technical_risk_v1"},
     }
     config_path = root / "run.yaml"
@@ -187,18 +213,20 @@ def _run_id(stem: str) -> str:
 def execute_images(
     images: list[Path],
     *,
-    target_text: str,
+    target_text: str | None,
     name: str,
+    scene_category: str = "unspecified",
     runs_root: Path | None = None,
     datasets_root: Path | None = None,
     detector_mode: str = "required",
     agent_profile: Path | None = None,
 ) -> dict[str, Any]:
     """Generate and Rule-score a Run; Agent executes only with an explicit profile."""
-    root, defaults = load_default_config()
-    target = parse_target(target_text)
+    root, defaults = load_public_defaults()
+    target = parse_target(target_text or defaults.default_target)
+    scene_category = parse_scene(scene_category)
     run_id = _run_id(name)
-    run_parent = (runs_root or root / str(defaults["review"]["runs_root"])).resolve()
+    run_parent = (runs_root or root / defaults.review.runs_root).resolve()
     dataset_parent = (datasets_root or root / "local_data" / "datasets").resolve()
     dataset = dataset_parent / run_id
     config_path = materialize_image_dataset(
@@ -208,6 +236,9 @@ def execute_images(
         target=target,
         runs_root=run_parent,
         detector_mode=detector_mode,
+        scene_category=scene_category,
+        method_profile=defaults.method_profile,
+        detector_suite_plugin=defaults.analysis_profile,
     )
     service = RetargetApplicationService.default()
     generation = service.generate_from_config(config_path)
@@ -227,6 +258,7 @@ def execute_images(
         "run_dir": str(run_dir),
         "dataset_dir": str(dataset),
         "target": {"width": target[0], "height": target[1]},
+        "scene_category": scene_category,
         "task_count": len(generation["task_ids"]),
         "candidate_count": len(generation["candidate_ids"]),
         "evaluation_id": evaluation["evaluation_id"],
@@ -236,6 +268,9 @@ def execute_images(
         ),
         "review_command": f"retarget-engine review open \"{run_dir}\"",
         "agent": {"status": "not_requested"},
+        "warnings": (
+            [UNSPECIFIED_SCENE_WARNING] if scene_category == "unspecified" else []
+        ),
     }
     if agent_profile is not None:
         from .agent_profiles import load_agent_runtime_profile
@@ -266,13 +301,15 @@ def execute_images(
 def run_image(
     input_path: Path,
     *,
-    target: str = "1536x1536",
+    target: str | None = None,
+    scene: str = "unspecified",
     agent_profile: Path | None = None,
 ) -> dict[str, Any]:
     return execute_images(
         [input_path],
         target_text=target,
         name=input_path.stem,
+        scene_category=scene,
         agent_profile=agent_profile,
     )
 
@@ -280,7 +317,8 @@ def run_image(
 def run_batch(
     input_dir: Path,
     *,
-    target: str = "1536x1536",
+    target: str | None = None,
+    scene: str = "unspecified",
     agent_profile: Path | None = None,
 ) -> dict[str, Any]:
     directory = input_dir.resolve()
@@ -295,5 +333,6 @@ def run_batch(
         images,
         target_text=target,
         name=directory.name,
+        scene_category=scene,
         agent_profile=agent_profile,
     )
