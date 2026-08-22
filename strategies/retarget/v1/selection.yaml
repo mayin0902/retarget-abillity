@@ -1,0 +1,13 @@
+schema_version: "1.0"
+policy_id: movie60-selection-v3-3
+version: "3.3.0"
+ranking_order:
+  - technical_valid_desc
+  - hard_failures_absent_desc
+  - critical_regressions_absent_desc
+  - generation_success_desc
+  - quality_score_desc
+  - method_id_asc
+score_gap_trigger: 10.0
+low_score_trigger: 65.0
+deterministic_fallback_threshold: 50.0

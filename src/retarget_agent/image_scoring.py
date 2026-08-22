@@ -29,9 +29,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 from pydantic import Field
 
 from .config import AnalysisConfig
-from .evaluation import EvaluationConfig
 from .hashing import sha256_file
-from .models import FrozenModel, RegionRecord, SourceRecord, TargetSpec, TaskSpec
+from .models import FrozenModel, RegionRecord
 from .prompting import LoadedPromptTemplate
 from .strategy import LoadedStrategyBundle
 
@@ -262,23 +261,6 @@ def _overlay(
     return canvas
 
 
-def _evaluation_config(strategy: LoadedStrategyBundle) -> EvaluationConfig:
-    policy = strategy.scoring
-    return EvaluationConfig(
-        evaluator_id=policy.evaluator_id,
-        evaluator_version=policy.evaluator_version,
-        rerun_detectors=True,
-        max_analysis_edge=policy.max_analysis_edge,
-        proxy_a_threshold=policy.proxy_a_threshold,
-        proxy_b_threshold=policy.proxy_b_threshold,
-        proxy_c_threshold=policy.proxy_c_threshold,
-        critical_text_recall=policy.critical_text_recall,
-        blank_std_threshold=policy.blank_std_threshold,
-        direct_warp_proxy_a_cap_d_stretch=policy.direct_warp_proxy_a_cap_d_stretch,
-        direct_warp_proxy_c_cap_d_stretch=policy.direct_warp_proxy_c_cap_d_stretch,
-    )
-
-
 def _write_report(output_dir: Path, payload: dict[str, Any]) -> None:
     (output_dir / "report.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -364,52 +346,39 @@ def score_image(
         detector_mode="required",
         detector_suite_plugin=suite_id,
     )
-    suite = catalog.detector_suites.get(suite_id)(config)
     candidate = _read_rgb(candidate_path)
-    started = time.perf_counter()
-    candidate_regions = suite.detect(candidate, 0.0)
     source: np.ndarray | None = None
     source_regions: tuple[RegionRecord, ...] | None = None
+    analyzer_ids: tuple[str, ...]
     if source_path is None:
+        suite = catalog.detector_suites.get(suite_id)(config)
+        started = time.perf_counter()
+        candidate_regions = suite.detect(candidate, 0.0)
         metrics = catalog.standalone_scorers.get(scorer_id)(
             image=candidate, regions=candidate_regions
         )
+        elapsed = time.perf_counter() - started
+        analyzer_ids = tuple(suite.analyzer_ids)
         mode = "standalone"
     else:
+        from .api import score_pair
+
         source = _read_rgb(source_path)
-        source_regions = suite.detect(source, 0.0)
-        source_record = SourceRecord(
-            source_id="single-source",
-            image_path=source_path.name,
-            width=source.shape[1],
-            height=source.shape[0],
-            sha256=sha256_file(source_path),
+        pair = score_pair(
+            source,
+            candidate,
+            strategy=strategy,
+            analysis_config=config,
+            plugin_catalog=catalog,
         )
-        target = TargetSpec(
-            target_id=f"target-{candidate.shape[1]}x{candidate.shape[0]}",
-            width=candidate.shape[1],
-            height=candidate.shape[0],
-        )
-        task = TaskSpec(
-            dataset_id="single-image-score",
-            task_id=f"{source_record.source_id}__{target.target_id}",
-            source=source_record,
-            target=target,
-        )
-        metrics = catalog.reference_scorers.get(scorer_id)(
-            source=source,
-            candidate=candidate,
-            task=task,
-            source_regions=source_regions,
-            candidate_regions=candidate_regions,
-            transform=None,
-            config=_evaluation_config(strategy),
-            scoring_policy=strategy.scoring,
-        )
+        metrics = pair.metrics
+        source_regions = pair.source_regions
+        candidate_regions = pair.candidate_regions
+        elapsed = pair.elapsed_seconds
+        analyzer_ids = pair.analyzer_ids
         metrics["detections"] = _counts(candidate_regions)
         metrics["source_detections"] = _counts(source_regions)
         mode = "reference"
-    elapsed = time.perf_counter() - started
     _overlay(
         (source, source_regions) if source is not None and source_regions is not None else None,
         (candidate, candidate_regions),
@@ -444,7 +413,7 @@ def score_image(
         "strategy_sha256": strategy.source_sha256,
         "detector_suite_plugin": suite_id,
         "scorer_plugin": scorer_id,
-        "analyzer_ids": list(suite.analyzer_ids),
+        "analyzer_ids": list(analyzer_ids),
         "elapsed_seconds": elapsed,
         "candidate_regions": _region_records(candidate_regions),
         "source_regions": (

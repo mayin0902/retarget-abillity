@@ -70,6 +70,8 @@ class RetargetApplicationService:
         backend_url: str | None = None,
         model_version: str | None = None,
         api_key_env: str | None = None,
+        agent_timeout_seconds: float = 120.0,
+        agent_max_output_tokens: int = 160,
         allow_external_aigc: bool = False,
         max_agent_calls: int | None = None,
         fixed_method_id: str | None = None,
@@ -82,32 +84,30 @@ class RetargetApplicationService:
         from .strategy import load_strategy_bundle
 
         parsed_mode = AgentMode(mode)
-        if skill_path is not None and strategy_path is not None:
-            raise ValueError("use strategy_path or skill_path, not both")
         strategy = load_strategy_bundle(strategy_path) if strategy_path is not None else None
         backend = None
+        loaded_skill = None
         if backend_url is not None or model_version is not None:
             if not backend_url or not model_version:
                 raise ValueError("backend_url and model_version must be provided together")
-            loaded_skill = None
-            if strategy is not None:
-                loaded_skill = strategy
-            elif skill_path is not None:
+            if skill_path is not None:
                 from .agent_skill import load_agent_skill
 
                 loaded_skill = load_agent_skill(skill_path)
+            elif strategy is not None:
+                loaded_skill = strategy
             skill = (
-                loaded_skill.agent_skill
-                if strategy is not None and loaded_skill is not None
-                else loaded_skill.skill
-                if loaded_skill is not None
+                loaded_skill.skill
+                if skill_path is not None and loaded_skill is not None
+                else strategy.agent_skill
+                if strategy is not None
                 else None
             )
             skill_sha256 = (
-                strategy.agent_skill_sha256
+                loaded_skill.source_sha256
+                if skill_path is not None and loaded_skill is not None
+                else strategy.agent_skill_sha256
                 if strategy is not None
-                else loaded_skill.source_sha256
-                if loaded_skill is not None
                 else None
             )
             from .plugin_catalog import built_in_plugin_catalog
@@ -122,6 +122,8 @@ class RetargetApplicationService:
                 base_url=backend_url,
                 model_version=model_version,
                 api_key_env=api_key_env,
+                timeout_seconds=agent_timeout_seconds,
+                max_output_tokens=agent_max_output_tokens,
                 cache_path=(
                     run_dir.resolve()
                     / "agent-cache"
@@ -164,6 +166,7 @@ class RetargetApplicationService:
             backend,
             comparison_dir,
             strategy_bundle=strategy,
+            skill_override=(loaded_skill if skill_path is not None else None),
         ).model_dump(mode="json")
 
     def build_benchmark(

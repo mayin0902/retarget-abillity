@@ -6,6 +6,20 @@
 构图和变换风险”，冻结 Rule 完整排名，并可选地让视觉 Agent 补充语义与非物理形变判断。
 Rule/Agent 都不是人工金标；统一 UI 用于最终人工复核和后续策略迭代。
 
+### 1.1 统一领域术语
+
+- **Source**：由 ID、SHA-256、像素尺寸和来源信息确定的不可变输入图；
+- **Target**：调用方要求的输出画布，可为任意受支持的宽高，不限定 1:1；
+- **Task**：一个 Source 到一个 Target 的稳定请求；
+- **Shared Protection Analysis**：同一 Task 中所有方法共享的 OCR、人脸、人物、商品、
+  Logo 候选、结构和显著性分析；
+- **Protection Region**：包含位置、语义、重要度与形变容忍度的证据区域，不等同于最终可用保证；
+- **Candidate**：一种方法对一个 Task 的不可变输出；技术成功不代表业务质量通过；
+- **Rule**：对冻结 Candidate 执行的确定性指标、门禁和完整排序；
+- **Agent**：读取原图、候选、Rule 排名和冻结 Skill/Knowledge 后给出的视觉语义建议；
+- **Review**：人工对冻结 Candidate 给出的 A/B/C/D 和理由；大模型预审不属于人工金标；
+- **Route Result**：Rule 主选、可选 Agent 建议与安全回退共同形成的最终选择。
+
 ## 2. 项目级流程图
 
 ```text
@@ -45,6 +59,8 @@ Adapter 负责把不同来源转换成同一界面模型。这样算法目录变
 
 ## 3. 关键深模块
 
+- `api/`：不写文件的 `retarget_image`、`generate_candidates`、`score_pair` 公共接口；
+- `analysis.py`：无 Dataset 依赖的 `ProtectionAnalyzerCore` 与 Dataset Adapter；
 - `simple_workflow.py`：单图/批量的小接口，隐藏 Dataset、Run、Evaluation 的装配细节；
 - `runner.py`：冻结输入，共享一次原图分析，并调用方法 Adapter；
 - `evaluation.py`：候选重检与 Reference Scorer；
@@ -216,8 +232,8 @@ Quality = 100 × weighted_mean(
 ### 6.1 多目标比例的证据边界
 
 1:1、16:9、9:16、4:3、3:4 Smoke 证明七方法生成、Rule、结果落盘和 UI 在工程上支持这些
-尺寸；`movie60@3.3.0` 的人工等级阈值仍主要依据 Movie60 1:1 校准。非 1:1 结果可以运行和
-人工查看，但不能仅凭工程 Smoke 宣称其 A/B/C/D 已完成人工泛化验证。
+尺寸；`retarget@1.0.0` 继承的 `movie60@3.3.0` 人工等级阈值仍主要依据 Movie60 1:1 校准。
+非 1:1 结果可以运行和人工查看，但不能仅凭工程 Smoke 宣称其 A/B/C/D 已完成人工泛化验证。
 
 ## 7. 正式 Rule 排名
 

@@ -593,6 +593,7 @@ class AgentCallRecord(FrozenModel):
     parsed_output: dict[str, Any] | None = None
     success: bool
     error_type: str | None = None
+    error_message: str | None = None
     latency_seconds: float | None = Field(default=None, ge=0.0)
     tokens: int | None = Field(default=None, ge=0)
     input_tokens: int | None = Field(default=None, ge=0)

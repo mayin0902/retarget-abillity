@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "retarget-engine"
-version = "0.7.1"
+version = "0.8.0"
 description = "An auditable Chinese-scene image retargeting engine with Agent and AIGC routing."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -31,6 +31,7 @@ company-models = [
   "transformers>=4.57,<6",
 ]
 dev = [
+  "build>=1.2,<2",
   "httpx>=0.28,<1",
   "pytest>=8,<10",
   "pytest-cov>=6,<8",
@@ -44,7 +45,13 @@ retarget-engine = "retarget_agent.cli:app"
 where = ["src"]
 
 [tool.setuptools.package-data]
-retarget_agent = ["web/*", "web_movie60/*"]
+retarget_agent = [
+  "web/*",
+  "web_movie60/*",
+  "resources/strategies/retarget/v1/*.yaml",
+  "resources/strategies/retarget/v1/prompts/*.yaml",
+  "resources/strategies/retarget/v1/prompts/*.txt",
+]
 
 [tool.pytest.ini_options]
 addopts = "-ra"

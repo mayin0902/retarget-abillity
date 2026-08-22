@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.0 - 2026-08-23
+
+- Add stable in-memory `retarget_image`, `generate_candidates`, and `score_pair` APIs for
+  service integration without Dataset or Run filesystem coupling.
+- Split reusable `ProtectionAnalyzerCore` from the Dataset compatibility adapter so OCR,
+  face, person, product, logo and saliency models can be initialized once and reused.
+- Add fail-closed Strategy registry validation to Bootstrap and document the code call graph,
+  extension seams, model lifecycle and Windows integration path.
+- Make Windows Bootstrap detect Python 3.11-3.13 explicitly, recommend 64-bit Python 3.12 when
+  missing, accept a company-approved interpreter path, and keep the virtual environment local.
+- Resolve Movie60 v4 assets from a release-tagged local download directory before attempting
+  GitHub access, while retaining checksum, CRC and archive-path validation.
+- Make CLI help tests independent from Rich/ANSI terminal rendering on Windows runners.
+- Freeze `retarget@1.0.0` as the current general Strategy, inheriting the human-aligned 3.3 Rule
+  and adding the independently hashed Simplified-Chinese Agent v8 Skill/Knowledge.
+- Validate one 60/60 fixed-revision Agent replay at 100% schema validity (5.90 s mean, 6.80 s
+  P95) and pass the non-regression human gate; the Agent remained advisory and changed no Top1.
+- Package Movie60 review v4 with immutable Chinese Agent evidence while preserving the v3
+  Release and 126 existing confirmed human candidate labels.
+
 ## 0.7.1 - 2026-08-21
 
 - Publish the verified Movie60 core, evidence and checksum assets together with the software

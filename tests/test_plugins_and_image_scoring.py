@@ -154,6 +154,31 @@ def test_reference_scoring_compares_source_and_candidate(tmp_path: Path) -> None
     assert (output / "inputs/source.png").is_file()
 
 
+def test_reference_scoring_supports_chinese_windows_paths(tmp_path: Path) -> None:
+    directory = tmp_path / "中文评测目录"
+    directory.mkdir()
+    source = directory / "海报原图.png"
+    candidate = directory / "方图候选.png"
+    output = directory / "评分结果"
+    values = np.zeros((72, 96, 3), dtype=np.uint8)
+    values[12:60, 20:80] = (220, 80, 30)
+    Image.fromarray(values).save(source)
+    Image.fromarray(values).save(candidate)
+
+    result = score_image(
+        source_path=source,
+        candidate_path=candidate,
+        output_dir=output,
+        strategy=load_strategy_bundle(V2),
+        plugin_catalog=_test_catalog(),
+    )
+
+    assert result["mode"] == "reference"
+    report = (output / "report.json").read_text(encoding="utf-8")
+    assert "测试" in report
+    assert (output / "inputs" / "source.png").is_file()
+
+
 def test_optional_standalone_agent_review_uses_external_prompt_and_no_preservation(
     tmp_path: Path, monkeypatch
 ) -> None:

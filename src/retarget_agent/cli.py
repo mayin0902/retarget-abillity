@@ -36,12 +36,21 @@ app.add_typer(score_app, name="score")
 app.add_typer(plugin_app, name="plugins")
 
 
+def _echo_json(payload: object) -> None:
+    """Print readable Unicode JSON, with an ASCII-safe fallback for legacy consoles."""
+
+    try:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+    except UnicodeEncodeError:
+        typer.echo(json.dumps(payload, ensure_ascii=True, indent=2))
+
+
 @plugin_app.command("list")
 def plugins_list() -> None:
     """Print executable plugin IDs accepted by StrategyBundle."""
     from .plugin_catalog import built_in_plugin_catalog
 
-    typer.echo(json.dumps(built_in_plugin_catalog().describe(), ensure_ascii=False, indent=2))
+    _echo_json(built_in_plugin_catalog().describe())
 
 
 def _image_review_backend(
@@ -108,7 +117,7 @@ def score_reference(
             loaded, agent_backend_url, agent_model, agent_api_key_env
         ),
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @score_app.command("standalone")
@@ -148,7 +157,7 @@ def score_standalone(
             loaded, agent_backend_url, agent_model, agent_api_key_env
         ),
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @app.command()
@@ -163,7 +172,7 @@ def doctor() -> None:
     from .doctor import run_doctor
 
     result = run_doctor()
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
     if not result["ready"]:
         raise typer.Exit(code=2)
 
@@ -177,23 +186,29 @@ def strategy_show(
     from .strategy import load_strategy_bundle
 
     loaded = load_strategy_bundle(bundle or current_strategy_path())
-    typer.echo(
-        json.dumps(
-            {
-                "bundle": loaded.bundle.model_dump(mode="json"),
-                "strategy_sha256": loaded.source_sha256,
-                "file_hashes": loaded.file_hashes,
-                "grade_thresholds": {
-                    "A_min": loaded.scoring.proxy_a_threshold,
-                    "B_min": loaded.scoring.proxy_b_threshold,
-                    "C_min": loaded.scoring.proxy_c_threshold,
-                    "D": f"score < {loaded.scoring.proxy_c_threshold}",
-                },
+    _echo_json(
+        {
+            "bundle": loaded.bundle.model_dump(mode="json"),
+            "strategy_sha256": loaded.source_sha256,
+            "file_hashes": loaded.file_hashes,
+            "grade_thresholds": {
+                "A_min": loaded.scoring.proxy_a_threshold,
+                "B_min": loaded.scoring.proxy_b_threshold,
+                "C_min": loaded.scoring.proxy_c_threshold,
+                "D": f"score < {loaded.scoring.proxy_c_threshold}",
             },
-            ensure_ascii=False,
-            indent=2,
-        )
+        }
     )
+
+
+@strategy_app.command("validate")
+def strategy_validate() -> None:
+    """Validate every immutable StrategyBundle pin and the current entry."""
+    from .defaults import project_root
+    from .strategy import validate_strategy_registry
+
+    result = validate_strategy_registry(project_root() / "strategies" / "registry.yaml")
+    _echo_json(result)
 
 
 @strategy_app.command("diff")
@@ -207,7 +222,7 @@ def strategy_diff(
     result = diff_strategy_bundles(
         load_strategy_bundle(old_bundle), load_strategy_bundle(new_bundle)
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @dataset_app.command("validate")
@@ -218,7 +233,7 @@ def dataset_validate(
     from .service import RetargetApplicationService
 
     result = RetargetApplicationService.default().validate_dataset(dataset_root)
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
     if not result["valid"]:
         raise typer.Exit(code=2)
 
@@ -231,7 +246,7 @@ def run_generate(
     from .service import RetargetApplicationService
 
     result = RetargetApplicationService.default().generate_from_config(config_path)
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @run_app.command("image")
@@ -269,7 +284,7 @@ def run_image_command(
     for warning in result.get("warnings", []):
         if warning != UNSPECIFIED_SCENE_WARNING:
             typer.echo(f"Warning: {warning}", err=True)
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @run_app.command("batch")
@@ -308,7 +323,7 @@ def run_batch_command(
     for warning in result.get("warnings", []):
         if warning != UNSPECIFIED_SCENE_WARNING:
             typer.echo(f"Warning: {warning}", err=True)
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @app.command("report")
@@ -319,7 +334,7 @@ def report(
     from .service import RetargetApplicationService
 
     result = RetargetApplicationService.default().build_report(run_dir)
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @app.command("audit")
@@ -330,7 +345,7 @@ def audit(
     from .audit import audit_run_contract
 
     result = audit_run_contract(run_dir)
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
     if result["status"] != "PASS":
         raise typer.Exit(code=2)
 
@@ -344,7 +359,7 @@ def replay_run(
     from .service import RetargetApplicationService
 
     result = RetargetApplicationService.default().replay(run_dir, replay_id)
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @app.command("evaluate")
@@ -372,7 +387,7 @@ def evaluate(
         rerun_detectors=not no_detectors,
         strategy_path=strategy,
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @agent_app.command("replay")
@@ -393,6 +408,24 @@ def agent_replay(
         str | None,
         typer.Option(help="Environment-variable name containing the endpoint token."),
     ] = None,
+    agent_timeout_seconds: Annotated[
+        float,
+        typer.Option(
+            "--agent-timeout-seconds",
+            min=1.0,
+            max=600.0,
+            help="Per-request VLM timeout; Movie60 GPU replay uses 120 seconds.",
+        ),
+    ] = 120.0,
+    agent_max_output_tokens: Annotated[
+        int,
+        typer.Option(
+            "--agent-max-output-tokens",
+            min=64,
+            max=1024,
+            help="Maximum structured Agent response tokens.",
+        ),
+    ] = 160,
     allow_external_aigc: Annotated[
         bool,
         typer.Option(help="Permit a route decision to request external generation."),
@@ -407,7 +440,12 @@ def agent_replay(
     ] = None,
     skill: Annotated[
         Path | None,
-        typer.Option("--skill", exists=True, dir_okay=False, help="Frozen Agent skill YAML."),
+        typer.Option(
+            "--skill",
+            exists=True,
+            dir_okay=False,
+            help="Frozen Agent skill YAML; overrides the Strategy skill only.",
+        ),
     ] = None,
     strategy: Annotated[
         Path | None,
@@ -434,6 +472,8 @@ def agent_replay(
         backend_url=backend_url,
         model_version=model,
         api_key_env=api_key_env,
+        agent_timeout_seconds=agent_timeout_seconds,
+        agent_max_output_tokens=agent_max_output_tokens,
         allow_external_aigc=allow_external_aigc,
         max_agent_calls=max_agent_calls,
         fixed_method_id=fixed_method,
@@ -441,7 +481,7 @@ def agent_replay(
         strategy_path=strategy,
         comparison_dir=comparison_dir,
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @benchmark_app.command("report")
@@ -466,7 +506,7 @@ def benchmark_report(
         benchmark_id,
         tuple(route_ids or ()),
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @generation_app.command("plan")
@@ -501,7 +541,7 @@ def generation_plan(
         source_audit,
         maximum_paid_calls=maximum_paid_calls,
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    _echo_json(result)
 
 
 @review_app.command("web")
@@ -637,6 +677,4 @@ def review_import(
     from .review_workspace import import_review_case
 
     target = output_dir or project_root() / "local_data" / "reviews" / source_dir.name
-    typer.echo(
-        json.dumps(import_review_case(source_dir, target), ensure_ascii=False, indent=2)
-    )
+    _echo_json(import_review_case(source_dir, target))

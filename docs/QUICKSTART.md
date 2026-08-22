@@ -19,22 +19,52 @@ py -3.12 -m pip config list
 
 - Windows 10/11；
 - Git；
-- Python 3.11～3.13，推荐 3.12，且 `py -3.12` 可运行；
-- 私有 GitHub 仓库读取权限；
-- 如需下载 Movie60 私有数据 Release：安装 GitHub CLI，并完成 `gh auth login`。
+- Python 3.11～3.13，推荐 3.12；优先使用 `py -3.12`，不可用时 Bootstrap 会校验 PATH
+  中的 `python`，并识别 PATH 中 Conda 的 base Python；也可显式传 `-PythonExecutable`；
+- GitHub 仓库读取权限；
+- 如需下载受控的 Movie60 数据 Release：安装 GitHub CLI，并完成 `gh auth login`。
 
 检查：
 
 ```powershell
 git --version
 py -3.12 --version
+python --version
 gh auth status
 ```
+
+### 1.1 电脑没有 Python，或版本不在 3.11～3.13
+
+推荐安装 64 位 Python 3.12。二选一：
+
+```powershell
+# Windows 10/11 有 winget 时，在普通 PowerShell 执行
+winget install --exact --id Python.Python.3.12
+```
+
+也可以从 Python 官方 Windows 下载页安装 3.12 x64。图形安装器第一页勾选
+`Add python.exe to PATH`，完成后**关闭并重新打开 PowerShell**，再验证：
+
+```powershell
+py -3.12 --version
+python --version
+```
+
+任一命令显示 3.11、3.12 或 3.13 即可继续。若公司已经提供固定 Python/Conda，但没有加入
+Launcher，可以显式指定，不必重复安装：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1 `
+  -PythonExecutable "D:\公司批准的Python目录\python.exe"
+```
+
+Bootstrap 不会自动执行系统级安装，也不会修改 PATH；找不到受支持版本时会停止并打印上述
+`winget` 建议，避免在公司电脑上静默变更系统软件。
 
 ## 2. Clone 并检查仓库
 
 ```powershell
-git clone <private-repository-url> retarget-abillity
+git clone <repository-url> retarget-abillity
 cd retarget-abillity
 git status --short --branch
 ```
@@ -116,25 +146,28 @@ gh auth login
 powershell -ExecutionPolicy Bypass -File scripts\materialize_review.ps1
 ```
 
-脚本从 `CURRENT_RELEASE.json` 指向的私有 GitHub Release 下载当前资产，按随包
+脚本从 `MOVIE60_RELEASE.json` 指向的 GitHub Release 下载当前资产，按随包
 `SHA256SUMS.txt` 校验 SHA-256，再解压到
 Git 忽略目录 `local_data\movie60-review-current`。已有且校验通过时脚本会直接复用，不重复
-下载。`v0.7.1` 起，Wheel、Movie60 core、完整 evidence 和校验文件位于同一个 Release；
-原 `movie60-review-v3` Pre-release 只保留作历史追溯。
+下载。`v0.8.0` 的 Wheel、Movie60 v4 core、完整 evidence 和校验文件位于同一个 Release；
+`v0.7.1`/Movie60 v3 和更早的 Pre-release 只保留作历史追溯。
+
+Release 的可见性由 GitHub 仓库和 Release 状态决定。Movie60 含受控素材时，维护者应使用
+私有仓库或 Draft Release；不要因为代码仓可公开就默认素材也允许公开再分发。
 
 ### Movie60 无法在线下载怎么办
 
 如果公司网络不能执行 `gh release download`：
 
-1. 在浏览器打开 `CURRENT_RELEASE.json` 中 `github_release_tag` 对应的私有 Release；
+1. 在浏览器打开 `MOVIE60_RELEASE.json` 中 `github_release_tag` 对应的 Release；
 2. 下载 `release_asset_names` 列出的三个文件。当前是：
-   - `movie60-review-v3-core.zip`
-   - `movie60-review-v3-evidence.zip`
+   - `movie60-review-v4-core.zip`
+   - `movie60-review-v4-evidence.zip`
    - `SHA256SUMS.txt`
 3. **不要解压、不要改名**，放入：
 
    ```text
-   local_data\release_assets\v0.7.1\
+   local_data\release_assets\v0.8.0\
    ```
 
 4. 再执行：
@@ -147,7 +180,7 @@ Git 忽略目录 `local_data\movie60-review-current`。已有且校验通过时�
 不够，必须同时有 `SHA256SUMS.txt`。
 
 ```text
-local_data\release_assets\v0.7.1\
+local_data\release_assets\v0.8.0\
 = 浏览器下载的原始压缩包
 
 local_data\movie60-review-current\
@@ -196,8 +229,8 @@ local_data\movie60-review-current\
 ```
 
 这些 Smoke 证明 Generation、Rule、结果落盘和 UI 的工程链路支持多种尺寸；当前
-`movie60@3.3.0` 的人工阈值证据仍主要来自 Movie60 1:1。不要把“代码能跑 16:9/9:16”解释为
-这些比例的 A/B/C/D 已完成人工校准。
+`retarget@1.0.0` 继承的 `movie60@3.3.0` 人工阈值证据仍主要来自 Movie60 1:1。不要把
+“代码能跑 16:9/9:16”解释为这些比例的 A/B/C/D 已完成人工校准。
 
 不传 `--target` 时读取 `configs/default.yaml` 的 `default_target`。方法 profile、检测 profile、
 Run 根目录和本地 UI host/port 也从同一文件读取；唯一 active Strategy 仍只由
@@ -284,7 +317,56 @@ runs/<run-id>/results/<evaluation-id>/<task-id>/result.json
 Reference 模式能比较内容保留；Standalone 只能报告清晰度、尺寸等无参考风险，不能证明
 语义完整。详见 `docs/REVIEW_AND_SCORING.md`。
 
-## 10. 显式启用 Agent
+## 10. 在 Python 中直接调用
+
+给其他 Python 服务集成时，优先使用内存 API。它接收 RGB `numpy.ndarray`，不要求先建立
+Dataset，也不会自动写 Run：
+
+```python
+from PIL import Image
+import numpy as np
+
+from retarget_agent.api import generate_candidates, retarget_image, score_pair
+
+source = np.asarray(Image.open("input.jpg").convert("RGB"))
+
+# 单一方法
+crop = retarget_image(source, target=(1536, 1536), method="crop", scene="movie_poster")
+assert crop.succeeded
+
+# 多方法；单个方法失败会保留失败记录，不会缩小分母
+candidates = generate_candidates(
+    source,
+    target=(1536, 1536),
+    methods=("crop", "seam", "mesh"),
+    scene="movie_poster",
+)
+
+# 原图与候选图的正式 Rule 对比评分
+score = score_pair(
+    source,
+    crop.image,
+    scene="movie_poster",
+    transform=crop.transform,
+)
+print(
+    score.quality_score,
+    score.grade,
+    score.content_fidelity,
+    score.visual_integrity,
+    score.composition,
+    score.gates,
+)
+```
+
+批量服务应复用同一个 `ProtectionAnalyzerCore`，避免为每张候选重复加载 OCR、人物、商品和
+Logo 模型。完整对象生命周期、输入输出与 Java 服务适配建议见 `docs/CODE_GUIDE.md`。
+
+从仓库运行时，`score_pair()` 默认读取 `strategies/registry.yaml` 的唯一 active Strategy；
+只安装 v0.8.0 Wheel、没有仓库目录时，则使用 Wheel 内同哈希的 `retarget@1.0.0` 快照。
+需要固定历史口径时应显式传入 Strategy 路径或 `LoadedStrategyBundle`，不要依赖当前默认值。
+
+## 11. 显式启用 Agent
 
 普通命令严格 Rule-only。需要 Agent 时复制私有 Profile：
 
@@ -301,12 +383,14 @@ $env:RETARGET_AGENT_API_KEY = "<本次会话Token>"
 Profile 与 Token 都不应提交。未传 `--agent-profile` 时 Agent 调用次数为 0；普通工作流也
 不会自动调用付费 AIGC。
 
-## 11. 常见错误
+## 12. 常见错误
 
 - `py -3.12` 不存在：先安装 Python 3.12，重新打开 PowerShell；
 - `.venv exists but has no Windows Python`：把损坏目录改名保留，再重新 Bootstrap；
 - `generation_with_company_models=false`：运行完整 Bootstrap；
 - UI 端口占用：传 `--port 8766`；
-- 私有 Release 下载失败：检查 `gh auth status` 和仓库 Release 权限，或按第 5 节把完整三件套
+- 旧版控制台不支持中文：CLI 会自动把终端 JSON 中的中文显示为 `\uXXXX`，评分文件仍以
+  UTF-8 保存且内容不丢失；想在当前窗口直接显示中文，可先执行 `chcp 65001`；
+- Release 下载失败：检查 `gh auth status` 和仓库 Release 权限，或按第 5 节把完整三件套
   放入 `local_data\release_assets\<github_release_tag>\`；
 - 新 Run 没有 Evaluation：用 `run image/batch` 完整入口，或按 `ADVANCED.md` 手工 evaluate。

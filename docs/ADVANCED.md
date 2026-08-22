@@ -53,7 +53,7 @@ prompts/             # 严格输入字段的 Prompt Bundle
 
 ## 4. 只调参数怎样迭代
 
-1. 复制当前版本到新目录，例如 `strategies/movie60/v3_4/`；
+1. 复制当前版本到新目录，例如 `strategies/retarget/v2/`；
 2. 更新 `bundle.yaml` 的 `version`、`parent_strategy` 和说明；
 3. 修改 `scoring.yaml` 中权重、阈值、惩罚或门禁；
 4. 保持 A≥B≥C，权重组总和为正；
@@ -125,6 +125,17 @@ Skill 规定行为、排序优先级、AIGC 门禁和理由代码；Knowledge �
 Agent Backend 输入还必须包含 Rule Top1 和完整 Rule 排名。返回 JSON 必须是候选的精确全
 排列，原图不能进入排名；Schema 错误按有限次数重试，仍失败则回退 Rule并保留错误证据。
 
+远端旧 GPU 可显式调节单请求边界：`agent replay --agent-timeout-seconds 120
+--agent-max-output-tokens 160`。两项值会写入 `agent-run.json`；Movie60 中文 Skill 的实测
+输入约 6k token，因此模型服务至少应提供 8,192 token 上下文。命令正常退出只表示 Run
+完整封存，是否真正调用成功还必须检查 `summary.json` 的 `schema_valid_rate`。用于策略晋升
+时，完整分母有效率不得低于 95%，且已有人工金标的 Task 必须全部获得有效响应。
+
+模型只返回 `C0...Cn` 短别名。若结构化 JSON 合法但排序出现重复或漏项，客户端保留模型给出的
+合法唯一顺序，并按冻结 Rule 顺序补齐缺项，同时写入
+`wire_alias_permutation_repaired`；不会凭空改变候选、分数或视觉等级。无法安全修复的响应仍
+标为失败并回退 Rule，错误详情保存在 Agent Call 的 `error_message`。
+
 ## 8. Agent Profile 与安全边界
 
 ```powershell
@@ -152,7 +163,7 @@ Run 配置是 `run.yaml`。完整手工流程：
 .\.venv\Scripts\retarget-engine.exe run generate <dataset-dir>\run.yaml
 .\.venv\Scripts\retarget-engine.exe evaluate runs\<run-id> `
   --evaluation-id rule-v-next `
-  --strategy strategies\movie60\v3_3\bundle.yaml
+  --strategy strategies\retarget\v1\bundle.yaml
 ```
 
 Evaluation 会冻结 Strategy 和 Rule 决策，但不会重新生成图片。若同一 Evaluation ID 已存在，
@@ -193,7 +204,8 @@ D:\review-case\
 ## 12. Release 和数据边界
 
 - Git：代码、配置、不可变策略、测试、小型 manifest 和四份主文档；
-- 私有 Movie60 Release：经授权像素、处理结果、机器/人工评审和必要说明；
+- 受控 Movie60 Release：经授权像素、处理结果、机器/人工评审和必要说明；其可见性必须
+  与素材再分发权限一致；
 - 本地忽略：模型权重、Run、缓存、Token、临时实验和不可再分发素材。
 
 发布软件版本前：全量 pytest、Ruff、五比例 Smoke、干净 Clone 安装和单图 result 验证必须
@@ -202,13 +214,13 @@ D:\review-case\
 
 ### 12.1 当前与旧打包入口
 
-- 当前唯一推荐入口：`scripts/package_movie60_review_v3.py`；
+- 当前唯一推荐入口：`scripts/package_movie60_review_v4.py`；v3 打包器只用于重现旧资产；
 - 公共确定性 ZIP/SHA 工具：`scripts/release_packaging.py`；
 - `scripts/package_movie60_release.py` 只用于复现历史 v1/v2，命令帮助会明确标为 legacy。
 
 普通交接和使用不需要执行任何打包脚本。下载/物化使用
 `scripts/materialize_review.ps1`，它会优先检查
-`local_data/release_assets/<CURRENT_RELEASE tag>/` 的三个原始资产。
+`local_data/release_assets/<MOVIE60_RELEASE tag>/` 的三个原始资产。
 
 ## 13. 公司网络模型下载决策
 

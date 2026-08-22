@@ -66,6 +66,7 @@ REASON_CODE_ZH = {
     "tie_in_composition_preservation": "两者构图保留程度相当",
     "visual_indistinguishable": "两者视觉差异不足以区分",
     "visual_integrity_score_conflict": "视觉判断与完整性指标冲突",
+    "wire_alias_permutation_repaired": "候选别名排列已按Rule顺序补全并审计记录",
 }
 
 _DIMENSIONS = (

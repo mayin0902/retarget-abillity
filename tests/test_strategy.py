@@ -13,6 +13,7 @@ from retarget_agent.strategy import (
     ScoringPolicy,
     diff_strategy_bundles,
     load_strategy_bundle,
+    validate_strategy_registry,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +46,14 @@ def test_registry_pins_immutable_strategy_hashes() -> None:
     for row in registry["strategies"]:
         loaded = load_strategy_bundle(ROOT / "strategies" / row["bundle"])
         assert loaded.source_sha256 == row["sha256"], row["strategy"]
+
+
+def test_registry_validator_checks_all_bundles_and_one_current() -> None:
+    result = validate_strategy_registry(ROOT / "strategies" / "registry.yaml")
+
+    assert result["status"] == "VALID"
+    assert result["strategy_count"] == 10
+    assert result["active_strategy"] == "retarget@1.0.0"
 
 
 def test_strategy_snapshot_is_self_contained_and_refuses_overwrite(tmp_path: Path) -> None:

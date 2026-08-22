@@ -1,8 +1,9 @@
-"""Shared deterministic protection analysis for the four M0-M4 methods."""
+"""Reusable protection analysis core plus the Dataset adapter used by Runs."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol
 
 import cv2
 import numpy as np
@@ -22,20 +23,38 @@ def _normalize(array: np.ndarray) -> np.ndarray:
     return ((array - minimum) / (maximum - minimum)).astype(np.float32)
 
 
-class SharedProtectionAnalyzer:
-    analyzer_id = "shared_protection"
-    analyzer_version = "2.0.0"
+class DetectorSuite(Protocol):
+    """Internal detector seam used by the analysis core and its tests."""
 
-    def __init__(self, dataset_root: Path, config: AnalysisConfig) -> None:
-        self.dataset_root = dataset_root
+    analyzer_ids: tuple[str, ...]
+
+    def detect(self, image_rgb: np.ndarray, padding_ratio: float) -> tuple[RegionRecord, ...]: ...
+
+
+class ProtectionAnalyzerCore:
+    """Analyze RGB images without requiring a Dataset directory.
+
+    The expensive detector suite is constructed once and reused.  Dataset
+    annotations and human guidance are inputs rather than hidden filesystem
+    dependencies, so embedders can use the same implementation in memory.
+    """
+
+    analyzer_id = "shared_protection"
+    analyzer_version = "3.0.0"
+
+    def __init__(
+        self,
+        config: AnalysisConfig,
+        *,
+        detector_suite: DetectorSuite | None = None,
+    ) -> None:
         self.config = config
-        self._region_rows = read_region_rows(dataset_root)
-        self._detector_suite: object | None = None
+        self._detector_suite = detector_suite
         self._detector_warning: str | None = None
         self._detection_cache: dict[str, tuple[RegionRecord, ...]] = {}
         self._saliency_cache_key: str | None = None
         self._saliency_cache_maps: tuple[np.ndarray, np.ndarray] | None = None
-        if config.detector_mode != "disabled":
+        if config.detector_mode != "disabled" and detector_suite is None:
             try:
                 from .plugin_catalog import built_in_plugin_catalog
 
@@ -53,6 +72,9 @@ class SharedProtectionAnalyzer:
         image: np.ndarray,
         task: TaskSpec,
         guidance: HumanGuidance | None = None,
+        *,
+        provided_regions: tuple[RegionRecord, ...] = (),
+        provided_analyzer_id: str = "provided_regions:1.0.0",
     ) -> AnalysisOutput:
         if image.ndim != 3 or image.shape[2] != 3:
             raise ValueError("analysis expects an RGB image")
@@ -69,18 +91,18 @@ class SharedProtectionAnalyzer:
         analyzer_ids: list[str] = [
             "image_metadata:1.0.0",
             "gradient_contrast_saliency:1.0.0",
-            "dataset_regions:1.0.0",
+            provided_analyzer_id,
         ]
         if self.config.detector_mode == "disabled":
             warnings.append("detector_pipeline_disabled_by_config")
         elif self._detector_warning is not None:
             warnings.append(self._detector_warning)
         elif self._detector_suite is not None:
-            analyzer_ids.extend(self._detector_suite.analyzer_ids)  # type: ignore[attr-defined]
+            analyzer_ids.extend(self._detector_suite.analyzer_ids)
             detected = self._detection_cache.get(task.source.sha256)
             if detected is None:
                 try:
-                    detected = self._detector_suite.detect(  # type: ignore[attr-defined]
+                    detected = self._detector_suite.detect(
                         image, self.config.region_padding_ratio
                     )
                 except (OSError, ValueError, cv2.error) as error:
@@ -92,27 +114,7 @@ class SharedProtectionAnalyzer:
             regions.extend(detected)
             for region in detected:
                 self._apply_region(importance, tolerance, region)
-        for row in self._region_rows:
-            if row.get("source_id") != task.source.source_id:
-                continue
-            try:
-                region = RegionRecord(
-                    region_id=row["region_id"],
-                    kind=row["kind"],
-                    rect=Rect(
-                        x1=int(row["x1"]),
-                        y1=int(row["y1"]),
-                        x2=int(row["x2"]),
-                        y2=int(row["y2"]),
-                    ),
-                    importance=float(row["importance"]),
-                    tolerance=float(row["tolerance"]),
-                    confidence=float(row["confidence"]),
-                    source=row["source"],
-                )
-            except (KeyError, ValueError, ValidationError) as error:
-                warnings.append(f"invalid annotation row ignored: {error}")
-                continue
+        for region in provided_regions:
             if region.rect.x2 > width or region.rect.y2 > height:
                 warnings.append(
                     f"region {region.region_id} is outside source bounds and was ignored"
@@ -194,3 +196,66 @@ class SharedProtectionAnalyzer:
         else:
             target_importance[:] = np.maximum(target_importance, region.importance)
             target_tolerance[:] = np.minimum(target_tolerance, region.tolerance)
+
+
+class SharedProtectionAnalyzer:
+    """Dataset adapter retaining the Runner's existing ``Analyzer`` interface."""
+
+    analyzer_id = ProtectionAnalyzerCore.analyzer_id
+    analyzer_version = ProtectionAnalyzerCore.analyzer_version
+
+    def __init__(self, dataset_root: Path, config: AnalysisConfig) -> None:
+        self.dataset_root = dataset_root
+        self.config = config
+        self._region_rows = read_region_rows(dataset_root)
+        self.core = ProtectionAnalyzerCore(config)
+
+    def analyze(
+        self,
+        image: np.ndarray,
+        task: TaskSpec,
+        guidance: HumanGuidance | None = None,
+    ) -> AnalysisOutput:
+        provided: list[RegionRecord] = []
+        adapter_warnings: list[str] = []
+        for row in self._region_rows:
+            if row.get("source_id") != task.source.source_id:
+                continue
+            try:
+                provided.append(
+                    RegionRecord(
+                        region_id=row["region_id"],
+                        kind=row["kind"],
+                        rect=Rect(
+                            x1=int(row["x1"]),
+                            y1=int(row["y1"]),
+                            x2=int(row["x2"]),
+                            y2=int(row["y2"]),
+                        ),
+                        importance=float(row["importance"]),
+                        tolerance=float(row["tolerance"]),
+                        confidence=float(row["confidence"]),
+                        source=row["source"],
+                    )
+                )
+            except (KeyError, ValueError, ValidationError) as error:
+                adapter_warnings.append(f"invalid annotation row ignored: {error}")
+        output = self.core.analyze(
+            image,
+            task,
+            guidance,
+            provided_regions=tuple(provided),
+            provided_analyzer_id="dataset_regions:1.0.0",
+        )
+        if not adapter_warnings:
+            return output
+        return AnalysisOutput(
+            importance_map=output.importance_map,
+            tolerance_map=output.tolerance_map,
+            regions=output.regions,
+            analyzer_ids=output.analyzer_ids,
+            warnings=output.warnings + tuple(adapter_warnings),
+        )
+
+
+__all__ = ["DetectorSuite", "ProtectionAnalyzerCore", "SharedProtectionAnalyzer"]

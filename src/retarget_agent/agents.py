@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
 import time
 import uuid
 from enum import StrEnum
@@ -15,7 +16,7 @@ from urllib.parse import urlparse
 import requests
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .agent_skill import AgentSkill
+from .agent_skill import AgentSkill, LoadedAgentSkill
 from .hashing import sha256_file, sha256_json
 from .models import (
     AgentCallRecord,
@@ -150,6 +151,20 @@ class VisionJudgeBackend(Protocol):
     def judge(self, request: JudgeAgentRequest, comparison_image: Path) -> AgentInvocation: ...
 
 
+def _localized_distortion(value: str) -> str:
+    normalized = value.strip()
+    known = {
+        "none": "未见明显形变",
+        "no": "未见明显形变",
+        "no visible distortion": "未见明显形变",
+        "no obvious distortion": "未见明显形变",
+        "unknown": "无法确认明显形变",
+        "uncertain": "无法确认明显形变",
+        "n/a": "不适用",
+    }
+    return known.get(normalized.lower(), normalized)
+
+
 class AgentReplayConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -202,7 +217,10 @@ class AgentReplayManifest(FrozenModel):
     agent_id: str | None = None
     agent_version: str | None = None
     model_version: str | None = None
+    backend_timeout_seconds: float | None = None
+    backend_max_output_tokens: int | None = None
     skill_sha256: str | None = None
+    skill_snapshot: str | None = None
     prompt_version: str
     comparison_input: str = "visualizations"
     config_hash: str
@@ -527,6 +545,7 @@ def decide_route(
             input_hash=sha256_json(request.model_dump(mode="json")),
             success=False,
             error_type=type(error).__name__,
+            error_message=str(error),
             latency_seconds=latency,
             changed_top1=False,
             fallback_strategy="hard_ranker",
@@ -564,6 +583,7 @@ class OpenAICompatibleVisionBackend:
         model_version: str,
         api_key_env: str | None = None,
         timeout_seconds: float = 90.0,
+        max_output_tokens: int = 256,
         cache_path: Path | None = None,
         skill: AgentSkill | None = None,
         skill_sha256: str | None = None,
@@ -574,10 +594,13 @@ class OpenAICompatibleVisionBackend:
             raise ValueError("base_url must be an HTTP(S) endpoint")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if not 64 <= max_output_tokens <= 1024:
+            raise ValueError("max_output_tokens must be between 64 and 1024")
         self.base_url = base_url.rstrip("/")
         self.model_version = model_version
         self.api_key_env = api_key_env
         self.timeout_seconds = timeout_seconds
+        self.max_output_tokens = max_output_tokens
         self.cache_path = cache_path.resolve() if cache_path is not None else None
         self.skill = skill
         self.skill_sha256 = skill_sha256
@@ -588,6 +611,7 @@ class OpenAICompatibleVisionBackend:
             {
                 "agent_version": self.agent_version,
                 "model_version": self.model_version,
+                "max_output_tokens": self.max_output_tokens,
                 "skill": self.skill.model_dump(mode="json") if self.skill is not None else None,
                 "skill_sha256": self.skill_sha256,
                 "prompt_template_sha256": (
@@ -605,7 +629,15 @@ class OpenAICompatibleVisionBackend:
         entry = (payload.get("entries") or {}).get(key)
         if entry is None:
             return None
-        return AgentInvocation.model_validate(entry).model_copy(update={"cache_hit": True})
+        cached = AgentInvocation.model_validate(entry)
+        response = cached.response.model_copy(
+            update={
+                "visible_distortion": _localized_distortion(
+                    cached.response.visible_distortion
+                )
+            }
+        )
+        return cached.model_copy(update={"cache_hit": True, "response": response})
 
     def _write_cached(self, key: str, invocation: AgentInvocation) -> None:
         if self.cache_path is None:
@@ -710,7 +742,7 @@ class OpenAICompatibleVisionBackend:
                 json={
                     "model": self.model_version,
                     "temperature": 0.0,
-                    "max_tokens": 256,
+                    "max_tokens": self.max_output_tokens,
                     "structured_outputs": {
                         "json": _JudgeWireResponse.model_json_schema(),
                     },
@@ -740,44 +772,61 @@ class OpenAICompatibleVisionBackend:
                 if start < 0 or end < start:
                     raise ValueError("Agent response does not contain JSON")
                 wire = _JudgeWireResponse.model_validate_json(content[start : end + 1])
-                if len(wire.candidate_ranking) != len(aliases) or set(
-                    wire.candidate_ranking
-                ) != set(aliases):
-                    raise ValueError("wire ranking is not an exact alias permutation")
+                ranking_aliases: list[str] = []
+                for alias in wire.candidate_ranking:
+                    if alias in aliases and alias not in ranking_aliases:
+                        ranking_aliases.append(alias)
+                ranking_aliases.extend(
+                    alias for alias in rule_ranking_aliases if alias not in ranking_aliases
+                )
+                repaired = tuple(ranking_aliases) != wire.candidate_ranking
+                best_alias = wire.best_candidate_alias
+                if best_alias not in aliases:
+                    best_alias = ranking_aliases[0]
+                    repaired = True
+                if best_alias != ranking_aliases[0]:
+                    ranking_aliases.remove(best_alias)
+                    ranking_aliases.insert(0, best_alias)
+                    repaired = True
+                challenger_alias = wire.challenger_alias
                 if (
-                    wire.best_candidate_alias is not None
-                    and wire.best_candidate_alias not in aliases
+                    challenger_alias not in aliases
+                    or challenger_alias == rule_ranking_aliases[0]
                 ):
-                    raise ValueError("wire best candidate alias is unknown")
-                if wire.challenger_alias is not None and wire.challenger_alias not in aliases:
-                    raise ValueError("wire challenger alias is unknown")
+                    if challenger_alias is not None:
+                        repaired = True
+                    challenger_alias = None
+                reason_codes = wire.reason_codes
+                if repaired and "wire_alias_permutation_repaired" not in reason_codes:
+                    reason_codes += ("wire_alias_permutation_repaired",)
                 parsed = JudgeAgentResponse(
                     task_id=request.task_id,
-                    candidate_ranking=tuple(aliases[alias] for alias in wire.candidate_ranking),
+                    candidate_ranking=tuple(aliases[alias] for alias in ranking_aliases),
                     best_candidate_id=(
-                        aliases[wire.best_candidate_alias]
-                        if wire.best_candidate_alias is not None
-                        else None
+                        aliases[best_alias] if best_alias is not None else None
                     ),
                     challenger_candidate_id=(
-                        aliases[wire.challenger_alias]
-                        if wire.challenger_alias is not None
+                        aliases[challenger_alias] if challenger_alias is not None else None
+                    ),
+                    challenger_core_content_preserved=(
+                        wire.challenger_core_content_preserved
+                        if challenger_alias is not None
                         else None
                     ),
-                    challenger_core_content_preserved=(wire.challenger_core_content_preserved),
                     proxy_grade=wire.proxy_grade,
                     core_content_preserved=wire.core_content_preserved,
-                    visible_distortion=wire.visible_distortion,
+                    visible_distortion=_localized_distortion(wire.visible_distortion),
                     confidence=wire.confidence,
-                    reason_codes=wire.reason_codes,
+                    reason_codes=reason_codes,
                     fallback_action=wire.fallback_action,
                 )
                 break
             except (KeyError, TypeError, ValueError) as error:
                 last_error = error
         if parsed is None:
+            detail = str(last_error) if last_error is not None else "unknown validation error"
             raise ValueError(
-                "Agent response failed schema validation after one retry"
+                f"Agent response failed schema validation after one retry: {detail}"
             ) from last_error
         invocation = AgentInvocation(
             response=parsed,
@@ -824,6 +873,11 @@ def _agent_summary(
         if decisions
         else None,
         "schema_valid_rate": sum(call.success for call in calls) / len(calls) if calls else None,
+        "agent_failure_count": sum(not call.success for call in calls),
+        "wire_alias_permutation_repair_count": sum(
+            "wire_alias_permutation_repaired" in (call.parsed_output or {}).get("reason_codes", ())
+            for call in calls
+        ),
         "agent_cache_hit_rate": sum(call.cache_hit for call in calls) / len(calls)
         if calls
         else None,
@@ -886,6 +940,7 @@ def run_agent_replay(
     comparison_dir: Path | None = None,
     task_ids: tuple[str, ...] | None = None,
     strategy_bundle: LoadedStrategyBundle | None = None,
+    skill_override: LoadedAgentSkill | None = None,
 ) -> AgentReplayManifest:
     """Compare Hard Ranker and controlled Agent routing on one frozen evaluation."""
 
@@ -899,6 +954,23 @@ def run_agent_replay(
     if strategy_bundle is not None:
         strategy_snapshot = f"{base}/strategy"
         strategy_bundle.snapshot_to(store.path(strategy_snapshot))
+    skill_snapshot = None
+    if skill_override is not None:
+        skill_snapshot = f"{base}/skill"
+        destination = store.path(skill_snapshot)
+        destination.mkdir(parents=True)
+        for source in skill_override.source_files:
+            shutil.copy2(source, destination / source.name)
+        store.write_json(
+            f"{skill_snapshot}/snapshot.json",
+            {
+                "schema_version": "1.0",
+                "skill_id": skill_override.skill.skill_id,
+                "skill_version": skill_override.skill.version,
+                "skill_sha256": skill_override.source_sha256,
+                "files": skill_override.file_hashes,
+            },
+        )
     source_run = RunManifest.model_validate(store.read_json("run.json"))
     resolved_comparison_dir = (
         comparison_dir.resolve() if comparison_dir is not None else run_dir / "visualizations"
@@ -972,7 +1044,12 @@ def run_agent_replay(
         agent_id=backend.agent_id if backend else None,
         agent_version=backend.agent_version if backend else None,
         model_version=backend.model_version if backend else None,
+        backend_timeout_seconds=(getattr(backend, "timeout_seconds", None) if backend else None),
+        backend_max_output_tokens=(
+            getattr(backend, "max_output_tokens", None) if backend else None
+        ),
         skill_sha256=getattr(backend, "skill_sha256", None) if backend else None,
+        skill_snapshot=skill_snapshot,
         prompt_version=config.prompt_version,
         comparison_input=comparison_relative,
         config_hash=config.config_hash,

@@ -7,7 +7,7 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $RepoRoot
 $Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
 $Output = Join-Path $RepoRoot 'local_data\movie60-review-current'
-$ReleaseConfig = Join-Path $RepoRoot 'CURRENT_RELEASE.json'
+$ReleaseConfig = Join-Path $RepoRoot 'MOVIE60_RELEASE.json'
 
 if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
     throw 'Missing .venv. Run scripts\bootstrap_windows.ps1 first.'

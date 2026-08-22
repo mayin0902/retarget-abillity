@@ -1,0 +1,66 @@
+schema_version: "1.0"
+knowledge_id: chinese-visual-review-cases
+version: "8.0.0"
+cases:
+  - case_id: direct_publishability_first
+    situation: 候选与原图布局差异明显，但核心人物、主标题、Logo和叙事完整，正常观看自然美观。
+    expected_judgement: 通常为A；若有轻微但可见的拉伸或紧裁则为B。
+    rationale: 重定向的目标是适配新画幅，不是复制原图像素或位置。
+    counterexample: 布局变化同时删除主角、主标题、主要商品或人物关系。
+  - case_id: clean_secondary_crop
+    situation: 次要群众、背景装饰、演职员小字或平台小标被整洁裁掉，主视觉与核心传播信息仍完整。
+    expected_judgement: 通常为A或B，不因检测计数下降自动判C。
+    rationale: 人类验收允许不影响上传与主叙事的次要内容损失。
+    counterexample: 被裁掉的是主角、情侣中的一人、主商品、主Logo或主标题。
+  - case_id: relationship_loss
+    situation: 原图核心是情侣、群体互动、人物与商品互动，候选变成孤立单主体或动作关系改变。
+    expected_judgement: 明显改变核心叙事判D；仍可理解但需修复判C。
+    rationale: 数量和关系是语义，不只是目标框数量。
+  - case_id: natural_uniform_scale
+    situation: 整体被均匀压缩或拉伸，但脸、身体、圆形、文字与刚性物体在正常观看下仍自然。
+    expected_judgement: 可为A；轻微可见但不影响使用为B。
+    rationale: 画幅差异不是缺陷，是否难看和是否需要返工才是等级依据。
+    counterexample: 人脸明显变宽、圆形变椭圆、文字笔画比例难看或物体比例失真。
+  - case_id: local_nonphysical_deformation
+    situation: seam或mesh造成局部肢体弯折、五官漂移、物品融化、重复边缘、背景断裂或不连续挤压。
+    expected_judgement: 需要修复判C；大面积、荒谬或发布事故级判D。
+    rationale: 局部不物理现象比全局尺寸变化更影响直接可用性。
+  - case_id: typography_visual_integrity
+    situation: OCR仍识别相近字符，但主标题出现断笔、重影、重复带、融字或明显歪斜。
+    expected_judgement: 主标题需返工判C；轻微风格变化但仍自然可读为A或B。
+    rationale: OCR召回衡量语义字符，不衡量排版和字形视觉完整性。
+    counterexample: 艺术字导致OCR变化，但候选中的字形本身仍连贯、清晰、美观。
+  - case_id: dominant_logo
+    situation: Logo或片名字标是画面主视觉，候选将其删除、遮挡、扭曲或改变为另一个形态。
+    expected_judgement: 需要修复判C；导致身份误导或大面积破坏判D。
+    rationale: 主Logo本身就是核心主体。
+    counterexample: 次要平台角标或非核心小Logo被干净裁掉，主视觉不受影响。
+  - case_id: face_body_integrity
+    situation: 人物数量不变，但主角脸型、眼口、手指、四肢连接或身体比例出现明显异常。
+    expected_judgement: 清晰可见且需修复判C；严重畸形判D。
+    rationale: 检测数量保持不能证明人物自然。
+  - case_id: border_contact
+    situation: 主体靠近边界或轻微切边，但身份、脸、关键肢体、动作和关系仍清楚完整。
+    expected_judgement: 构图自然可判A；略紧但可用判B。
+    rationale: 接触边界不等于核心内容丢失。
+    counterexample: 半张脸、关键手势、商品身份或关系对象被截断。
+  - case_id: detector_conflict
+    situation: OCR或目标计数下降，但高清原图与候选对比显示内容实际仍完整自然。
+    expected_judgement: 标记检测误差并按视觉判A或B，不让软指标单独触发C/D。
+    rationale: 检测器可能漏检、误分艺术字或在缩放后改变置信度。
+  - case_id: combined_moderate_defects
+    situation: 单项问题都不灾难，但主脸、关键道具和主标题同时存在可见损伤。
+    expected_judgement: 综合后若设计师必须返工则判C。
+    rationale: 多个中等问题会共同跨过直接可发布边界。
+  - case_id: aesthetic_crop_preference
+    situation: crop去掉次要信息后形成平衡自然的方图，而高相似候选保留更多内容却明显拉伸或局部扭曲。
+    expected_judgement: 优先自然且核心完整的crop。
+    rationale: 人类视觉偏好与像素相似度不同。
+  - case_id: method_name_is_not_evidence
+    situation: 候选来自warp、seam或mesh，但正常观看和高清局部都看不出实际缺陷。
+    expected_judgement: 不因方法先验降级；依据成图判A或B。
+    rationale: 方法风险只用于提醒复核，不能代替图像证据。
+  - case_id: uncertain_visual_evidence
+    situation: 缩略总览似乎有缺陷，但高清对比无法确认，检测证据也互相矛盾。
+    expected_judgement: 降低置信度、保留Rule，并建议人工复核。
+    rationale: Agent只能在证据明确时覆盖Rule。

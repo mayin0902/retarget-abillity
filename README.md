@@ -9,7 +9,7 @@
 [QUICKSTART](docs/QUICKSTART.md#0-先确认公司-pip-镜像)。
 
 ```powershell
-git clone <private-repository-url> retarget-abillity
+git clone <repository-url> retarget-abillity
 cd retarget-abillity
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1 -PythonVersion 3.12
 .\.venv\Scripts\retarget-engine.exe doctor
@@ -45,12 +45,36 @@ powershell -ExecutionPolicy Bypass -File scripts\materialize_review.ps1
 `--agent-profile configs\agent-profile.private.yaml` 显式启用。新图应显式传 `--scene`；省略时
 会冻结为 `unspecified` 并提示场景化 Strategy 门禁不会生效。
 
+## Python 内存接口
+
+```python
+import numpy as np
+from PIL import Image
+from retarget_agent.api import retarget_image, score_pair
+
+source = np.asarray(Image.open("poster.jpg").convert("RGB"))
+candidate = retarget_image(
+    source, (1536, 1536), method="crop", scene="movie_poster"
+)
+if candidate.image is not None:
+    score = score_pair(
+        source,
+        candidate.image,
+        scene="movie_poster",
+        transform=candidate.transform,
+    )
+    print(score.quality_score, score.grade)
+```
+
+这两个接口不写文件；完整契约、模型复用和迁移清单见 `docs/CODE_GUIDE.md`。
+
 ## 文档
 
 - [QUICKSTART](docs/QUICKSTART.md)：从 Clone、公司镜像、安装到单图/批量运行。
 - [REVIEW_AND_SCORING](docs/REVIEW_AND_SCORING.md)：打开 UI、自动评分、人工结果位置。
 - [ARCHITECTURE](docs/ARCHITECTURE.md)：保护分析、七算法、Rule、Agent 和统一评审接口。
+- [CODE_GUIDE](docs/CODE_GUIDE.md)：逐函数阅读路径、Python Public API 与最小迁移清单。
 - [ADVANCED](docs/ADVANCED.md)：Strategy、插件、Replay、Agent Profile 与版本追溯。
 
 当前唯一 active Strategy 由 `strategies/registry.yaml` 决定；当前交付事实见
-`CURRENT_RELEASE.json`。自动分数和 Agent 建议不是人工金标准。
+`MOVIE60_RELEASE.json`。自动分数和 Agent 建议不是人工金标准。

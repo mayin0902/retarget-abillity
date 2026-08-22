@@ -3,7 +3,7 @@
 ## 1. 三种数据共用一个页面
 
 ```text
-Movie60 私有 Release ─┐
+Movie60 受控 Release ─┐
 标准 Generation Run ─┼─> ReviewWorkspaceAdapter -> FastAPI -> 浏览器页面
 外部 source+candidates ┘
 ```

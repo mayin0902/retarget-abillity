@@ -10,13 +10,19 @@ import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-CURRENT_RELEASE = Path(__file__).resolve().parents[1] / "CURRENT_RELEASE.json"
+MOVIE60_RELEASE = Path(__file__).resolve().parents[1] / "MOVIE60_RELEASE.json"
 SAFE_RELEASE_TAG = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 
 
 def asset_names(release_version: str) -> tuple[str, str, str]:
     if not release_version.startswith("v") or not release_version[1:].isdigit():
-        raise ValueError("release_version must look like v1, v2 or v3")
+        raise ValueError("release_version must look like v1, v2, v3 or v4")
+    if release_version == "v4":
+        return (
+            "movie60-review-v4-core.zip",
+            "movie60-review-v4-evidence.zip",
+            "SHA256SUMS.txt",
+        )
     if release_version == "v3":
         return (
             "movie60-review-v3-core.zip",
@@ -37,21 +43,21 @@ def _validate_release_tag(tag: str) -> str:
     return normalized
 
 
-def release_defaults(config_path: Path = CURRENT_RELEASE) -> tuple[str, str]:
+def release_defaults(config_path: Path = MOVIE60_RELEASE) -> tuple[str, str]:
     """Return the one supported GitHub tag and asset generation from repository metadata."""
 
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError("CURRENT_RELEASE.json must contain a JSON object")
+        raise ValueError("MOVIE60_RELEASE.json must contain a JSON object")
     tag = payload.get("github_release_tag")
     release_version = payload.get("release_version")
     if not isinstance(tag, str) or not tag.strip():
-        raise ValueError("CURRENT_RELEASE.json is missing github_release_tag")
+        raise ValueError("MOVIE60_RELEASE.json is missing github_release_tag")
     if not isinstance(release_version, str):
-        raise ValueError("CURRENT_RELEASE.json is missing release_version")
+        raise ValueError("MOVIE60_RELEASE.json is missing release_version")
     expected_assets = list(asset_names(release_version))
     if payload.get("release_asset_names") != expected_assets:
-        raise ValueError("CURRENT_RELEASE.json asset names do not match release_version")
+        raise ValueError("MOVIE60_RELEASE.json asset names do not match release_version")
     return _validate_release_tag(tag), release_version
 
 
@@ -62,7 +68,7 @@ def default_asset_directory(
 ) -> Path:
     """Return the fixed browser-download directory for one GitHub Release tag."""
 
-    root = (repository_root or CURRENT_RELEASE.parent).resolve()
+    root = (repository_root or MOVIE60_RELEASE.parent).resolve()
     return root / "local_data" / "release_assets" / _validate_release_tag(tag)
 
 
@@ -143,7 +149,11 @@ def verify_and_materialize(
                     raise ValueError(f"ZIP CRC failure in {name}: {bad}")
                 archive.extractall(extracted, members=_safe_members(archive))
         roots = [item for item in extracted.iterdir() if item.is_dir()]
-        expected_root = "movie60-review-v3" if release_version == "v3" else "movie60-review"
+        expected_root = (
+            f"movie60-review-{release_version}"
+            if release_version in {"v3", "v4"}
+            else "movie60-review"
+        )
         if len(roots) != 1 or roots[0].name != expected_root:
             raise ValueError(f"release archives must merge into one {expected_root} directory")
         shutil.move(str(roots[0]), output_dir)
@@ -204,16 +214,16 @@ def materialize_release(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Download, hash-check and safely materialize the private Movie60 release."
+        description="Download, hash-check and safely materialize the controlled Movie60 release."
     )
     parser.add_argument("--repo", default="mayin0902/retarget-abillity")
     parser.add_argument(
         "--tag",
-        help="GitHub Release tag; defaults to CURRENT_RELEASE.json.",
+        help="GitHub Release tag; defaults to MOVIE60_RELEASE.json.",
     )
     parser.add_argument(
         "--release-version",
-        help="Movie60 asset generation; defaults to CURRENT_RELEASE.json.",
+        help="Movie60 asset generation; defaults to MOVIE60_RELEASE.json.",
     )
     parser.add_argument(
         "--output-dir",

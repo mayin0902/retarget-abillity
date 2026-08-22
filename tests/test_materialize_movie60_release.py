@@ -79,7 +79,7 @@ def test_v3_root_and_asset_names_are_independent(tmp_path: Path) -> None:
 def test_release_defaults_are_loaded_and_asset_names_are_cross_checked(
     tmp_path: Path,
 ) -> None:
-    config = tmp_path / "CURRENT_RELEASE.json"
+    config = tmp_path / "MOVIE60_RELEASE.json"
     config.write_text(
         json.dumps(
             {
@@ -101,7 +101,36 @@ def test_release_defaults_are_loaded_and_asset_names_are_cross_checked(
 
 
 def test_repository_current_release_points_to_unified_software_release() -> None:
-    assert materialize_movie60_release.release_defaults() == ("v0.7.1", "v3")
+    assert materialize_movie60_release.release_defaults() == ("v0.8.0", "v4")
+
+
+def test_v4_uses_immutable_asset_names() -> None:
+    assert materialize_movie60_release.asset_names("v4") == (
+        "movie60-review-v4-core.zip",
+        "movie60-review-v4-evidence.zip",
+        "SHA256SUMS.txt",
+    )
+
+
+def test_v4_archives_merge_into_the_v4_root(tmp_path: Path) -> None:
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    core = assets / "movie60-review-v4-core.zip"
+    evidence = assets / "movie60-review-v4-evidence.zip"
+    with zipfile.ZipFile(core, "w") as archive:
+        archive.writestr("movie60-review-v4/VERSION.json", b"{}")
+    with zipfile.ZipFile(evidence, "w") as archive:
+        archive.writestr("movie60-review-v4/evidence.txt", b"evidence")
+    (assets / "SHA256SUMS.txt").write_text(
+        f"{_digest(core)}  {core.name}\n{_digest(evidence)}  {evidence.name}\n",
+        encoding="ascii",
+    )
+
+    output = tmp_path / "current"
+    verify_and_materialize(assets, output, release_version="v4")
+
+    assert (output / "VERSION.json").is_file()
+    assert (output / "evidence.txt").read_bytes() == b"evidence"
 
 
 def test_default_local_asset_directory_is_namespaced_by_release_tag(tmp_path: Path) -> None:

@@ -251,20 +251,23 @@ def test_openai_backend_sends_vllm_json_schema(
         base_url="http://127.0.0.1:18000/v1",
         model_version="fixture-model",
         cache_path=tmp_path / "agent-cache.json",
+        max_output_tokens=160,
     )
 
     invocation = backend.judge(value, image)
     cached = backend.judge(value, image)
 
     assert invocation.response.best_candidate_id == value.deterministic_ranking[0]
+    assert invocation.response.visible_distortion == "未见明显形变"
     assert invocation.input_tokens == 10
     assert invocation.output_tokens == 20
     assert not invocation.cache_hit
     assert cached.cache_hit
+    assert cached.response.visible_distortion == "未见明显形变"
     assert post_count == 1
     payload = captured["json"]
     assert isinstance(payload, dict)
-    assert payload["max_tokens"] == 256
+    assert payload["max_tokens"] == 160
     wire_schema = payload["structured_outputs"]["json"]
     assert "best_candidate_alias" in wire_schema["properties"]
     assert "challenger_alias" in wire_schema["properties"]
@@ -323,15 +326,18 @@ def test_openai_backend_retries_schema_once(
     assert invocation.output_tokens == 14
 
 
-def test_openai_backend_rejects_unknown_wire_alias(
+def test_openai_backend_repairs_unknown_wire_alias_with_rule_order(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    value = request(candidate("crop", 80, grade=ProxyGrade.A))
+    first = candidate("crop", 80, grade=ProxyGrade.A)
+    second = candidate("mesh", 78, grade=ProxyGrade.B)
+    third = candidate("seam", 76, grade=ProxyGrade.B)
+    value = request(first, second, third)
     invalid = json.dumps(
         {
             "schema_version": "1.0",
-            "candidate_ranking": ["C9"],
-            "best_candidate_alias": "C9",
+            "candidate_ranking": ["C2", "C2", "C9"],
+            "best_candidate_alias": "C2",
             "proxy_grade": "proxy_a",
             "core_content_preserved": True,
             "visible_distortion": "none",
@@ -356,8 +362,15 @@ def test_openai_backend_rejects_unknown_wire_alias(
         model_version="fixture-model",
     )
 
-    with pytest.raises(ValueError, match="failed schema validation"):
-        backend.judge(value, image)
+    invocation = backend.judge(value, image)
+
+    assert invocation.response.candidate_ranking == (
+        third.candidate_id,
+        first.candidate_id,
+        second.candidate_id,
+    )
+    assert invocation.response.best_candidate_id == third.candidate_id
+    assert "wire_alias_permutation_repaired" in invocation.response.reason_codes
 
 
 def test_wire_schema_rejects_source_as_candidate_alias() -> None:

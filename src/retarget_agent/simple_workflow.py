@@ -15,17 +15,10 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from .config import METHOD_PROFILES, method_parameters_for_profile
 from .defaults import current_strategy_path, load_public_defaults
 from .hashing import sha256_file
+from .scenes import normalize_scene
 from .service import RetargetApplicationService
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
-SCENE_CATEGORIES = {
-    "movie_poster",
-    "film_still",
-    "video_cover",
-    "person",
-    "product",
-    "unspecified",
-}
 UNSPECIFIED_SCENE_WARNING = (
     "Scene category not specified. Scene-specific Strategy gates will not be applied."
 )
@@ -59,13 +52,7 @@ def parse_target(value: str) -> tuple[int, int]:
 
 def parse_scene(value: str) -> str:
     """Validate the explicit scene label used by scene-specific Strategy gates."""
-
-    normalized = value.strip().lower()
-    if normalized not in SCENE_CATEGORIES:
-        raise ValueError(
-            "scene must be one of: " + ", ".join(sorted(SCENE_CATEGORIES))
-        )
-    return normalized
+    return normalize_scene(value)
 
 
 def _slug(value: str) -> str:

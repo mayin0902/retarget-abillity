@@ -437,6 +437,68 @@ def load_strategy_bundle(path: Path) -> LoadedStrategyBundle:
     )
 
 
+def validate_strategy_registry(path: Path) -> dict[str, object]:
+    """Validate every immutable bundle pin and the single-current invariant."""
+
+    path = path.resolve()
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or not isinstance(raw.get("strategies"), list):
+        raise ValueError("strategy registry must contain a strategies list")
+    rows = raw["strategies"]
+    if not rows:
+        raise ValueError("strategy registry must not be empty")
+    root = path.parent
+    seen: set[str] = set()
+    active: list[str] = []
+    validated: list[dict[str, str]] = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"strategy registry row {index} must be a mapping")
+        strategy_id = str(row.get("strategy") or "")
+        if not strategy_id or strategy_id in seen:
+            raise ValueError(f"duplicate or empty strategy registry ID: {strategy_id!r}")
+        seen.add(strategy_id)
+        relative = PurePosixPath(str(row.get("bundle") or "").replace("\\", "/"))
+        if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+            raise ValueError(f"strategy bundle path must stay below strategies/: {relative}")
+        bundle_path = root / relative
+        loaded = load_strategy_bundle(bundle_path)
+        expected_id = f"{loaded.bundle.strategy_id}@{loaded.bundle.version}"
+        if strategy_id != expected_id:
+            raise ValueError(
+                f"registry ID {strategy_id!r} does not match bundle {expected_id!r}"
+            )
+        expected_sha = str(row.get("sha256") or "")
+        if loaded.source_sha256 != expected_sha:
+            raise ValueError(
+                f"strategy hash mismatch for {strategy_id}: "
+                f"{loaded.source_sha256} != {expected_sha}"
+            )
+        status = str(row.get("status") or "")
+        if status not in {"active", "frozen", "deprecated"}:
+            raise ValueError(f"invalid registry status for {strategy_id}: {status!r}")
+        if status == "active":
+            active.append(strategy_id)
+        validated.append(
+            {
+                "strategy": strategy_id,
+                "status": status,
+                "bundle": relative.as_posix(),
+                "sha256": loaded.source_sha256,
+            }
+        )
+    if len(active) != 1:
+        raise ValueError(
+            f"strategy registry must contain exactly one active entry, got {len(active)}"
+        )
+    return {
+        "status": "VALID",
+        "strategy_count": len(validated),
+        "active_strategy": active[0],
+        "strategies": validated,
+    }
+
+
 def diff_strategy_bundles(
     left: LoadedStrategyBundle, right: LoadedStrategyBundle
 ) -> dict[str, object]:
