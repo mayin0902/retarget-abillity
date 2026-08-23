@@ -1,4 +1,4 @@
-"""One application surface shared by CLI, Streamlit and FastAPI."""
+"""Application service shared by CLI and local web/FastAPI adapters."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .providers.base import AIGCGenerationRequest
 
 
 class RetargetApplicationService:
-    """M0-M4 use cases; concrete collaborators are assembled by ``default``."""
+    """Application use cases; concrete collaborators are assembled by ``default``."""
 
     @classmethod
     def default(cls) -> RetargetApplicationService:

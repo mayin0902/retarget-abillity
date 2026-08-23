@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }}
+    name: Core Python ${{ matrix.python-version }}
     runs-on: windows-latest
     timeout-minutes: 20
     strategy:

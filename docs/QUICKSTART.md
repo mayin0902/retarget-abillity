@@ -19,8 +19,10 @@ py -3.12 -m pip config list
 
 - Windows 10/11；
 - Git；
-- Python 3.11～3.13，推荐 3.12；优先使用 `py -3.12`，不可用时 Bootstrap 会校验 PATH
-  中的 `python`，并识别 PATH 中 Conda 的 base Python；也可显式传 `-PythonExecutable`；
+- 核心 Retarget Engine 在 CI 中覆盖 Python 3.11、3.12、3.13；完整 `company_cpu_v2` 模型
+  环境推荐 Python 3.12，并以目标 Windows 电脑实际完成 Bootstrap 和 `doctor` 为准。优先
+  使用 `py -3.12`；不可用时 Bootstrap 会校验 PATH 中的 `python`，并识别 PATH 中 Conda 的
+  base Python；也可显式传 `-PythonExecutable`；
 - GitHub 仓库读取权限；
 - 如需下载受控的 Movie60 数据 Release：安装 GitHub CLI，并完成 `gh auth login`。
 
@@ -100,6 +102,15 @@ Bootstrap 依次完成：
 5. 校验历史与 current Strategy；
 6. 跑最小测试；
 7. 执行 `doctor`。
+
+GitHub 的 3.11～3.13 矩阵安装 `.[dev]`，验证的是核心代码、CLI、Strategy 和离线测试，不会
+下载完整 PaddleOCR/PaddlePaddle/ONNX Runtime/Torch/Transformers 模型栈。因此 CI 绿色不等于
+目标电脑的完整模型环境已经验收；交接时必须在那台电脑运行完整 Bootstrap 和 `doctor`。
+
+`requirements/company-models-windows.txt` 是正式模型运行时的顶层版本来源；
+`pyproject.toml` 的 `company-models` extra 镜像同一组精确 pin，并由测试防止漂移。手工执行
+`pip install -e ".[company-models]"` 虽会得到相同顶层版本，但不会物化或校验权重，正式安装
+仍应使用 Bootstrap。
 
 成功标志是最后打印 `Bootstrap completed.`。`.venv` 只是本机解释器和依赖目录，不是可
 迁移发布物；换电脑或换 Python 后应重新 Bootstrap，而不是复制 `.venv`。

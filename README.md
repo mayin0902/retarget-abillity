@@ -19,6 +19,9 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1 -PythonVe
 Python 环境或模型 manifest 发生变化，再重新执行 Bootstrap。以后双击 `START_REVIEW.bat`
 即可优先打开最近完成的 Run；没有 Run 时回退到当前 Movie60。
 
+核心代码在 CI 中覆盖 Python 3.11～3.13；完整 `company_cpu_v2` 模型环境推荐 Python 3.12，
+并以目标 Windows 电脑实际完成 Bootstrap 与 `doctor` 为准。
+
 ## 最常用命令
 
 ```powershell

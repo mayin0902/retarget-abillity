@@ -1,5 +1,7 @@
-# Current company_cpu_v2 top-level model runtime, verified for Windows x64 on 2026-08-20.
-# Install together with the base project; transitive packages remain resolved by pip.
+# Authoritative company_cpu_v2 top-level pins, verified for Windows x64 on 2026-08-20.
+# The pyproject company-models extra mirrors these exact values; a packaging test rejects drift.
+# Bootstrap remains the formal install path because it also materializes and verifies model assets.
+# Transitive packages remain resolved by pip.
 paddleocr==3.7.0
 paddlepaddle==3.3.1
 onnxruntime==1.29.0

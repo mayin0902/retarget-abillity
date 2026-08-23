@@ -12,6 +12,8 @@
   Detector, Scorer, Rule, Agent Skill/Knowledge/Prompt and retarget-method adapters.
 - Clarify the active Agent Skill snapshot, isolate Movie60 experiments from production entry
   points, and define one owner document for setup, code reading, architecture and extension work.
+- Align the optional company-model extra with the authoritative Windows runtime pins and clarify
+  that the three-version CI matrix verifies core code, not the complete local model stack.
 - Test the supported Python 3.11, 3.12 and 3.13 range in the Windows CI matrix.
 
 Movie60 images, human labels, machine ratings and UI assets remain the immutable v0.8.0/v4 data
