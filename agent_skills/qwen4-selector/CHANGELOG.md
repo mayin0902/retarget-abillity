@@ -1,10 +1,24 @@
 # Qwen4 selector skill changelog
 
+## Current adoption status
+
+Qwen4 selector v8 / Skill 2.4.0 has been adopted by the active
+`retarget@1.0.0` StrategyBundle. The version directories under `agent_skills/`
+are immutable authoring and history artifacts; the runtime source of truth is
+the Agent Skill/Knowledge snapshot referenced by the active bundle under
+`strategies/retarget/v1/`.
+
+In short:
+
+- `agent_skills/` = Skill authoring history;
+- `strategies/retarget/v1/` = currently executed frozen snapshot;
+- `movie60@3.3.0` = frozen predecessor retained for replay, not the active Strategy.
+
 ## 2.4.0
 
-- Adds a fully Simplified-Chinese general Skill for the next Strategy version.
+- Added the fully Simplified-Chinese general Skill that was later adopted by `retarget@1.0.0`.
 - Splits reusable visual precedents into a lightweight, versioned `agent-knowledge.yaml`.
-- Keeps current `movie60@3.3.0` immutable; adoption requires a new StrategyBundle.
+- Preserved the then-current `movie60@3.3.0`; adoption occurred through a new immutable bundle.
 
 ## 2.3.0
 

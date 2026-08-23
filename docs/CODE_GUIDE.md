@@ -313,6 +313,10 @@ generation_execution.execute_generation()
 Prompt 和稳定 ID；不包含 API Key，也不包含公司的素材外发规则。Endpoint、鉴权、模型名、
 请求 JSON、异步轮询和厂商错误由 Adapter 实现。
 
+该调用链结束于生成图片和 `execution.json`，不会把图片自动写回已有 Run/Evaluation，也不会
+自动挑战 Rule Top1。评价图片使用 Public Scoring API；是否把它加入最终路由由上层业务编排
+决定。
+
 `AIGCProviderRuntime` 提供输出目录、缓存目录和超时；预算、调用者幂等标签均可为 `None`。
 `AIGCProviderResult` 的成本字段也允许 `None`。通用执行模块一定记录耗时、输出 SHA-256 和
 明确成功/失败，因为后续评分必须能够定位同一张像素结果。
@@ -338,17 +342,16 @@ Agent Run 不需要改页面结构。
 
 ## 18. 如何新增算法
 
-1. 在 `methods/` 新建实现并满足 `CandidateMethod`；
-2. 在 `built_in_methods()` 注册稳定 ID；
-3. 在 `config.py` 的方法 Profile 中显式决定是否启用；
-4. 为目标尺寸、失败隔离、Transform 风险写接口测试；
-5. 若改默认 Profile，新建版本并跑真实图片，不从程序化 Fixture 推导质量结论。
+本指南只负责定位阅读入口：先看 `methods/__init__.py::built_in_methods()`，再看一个现有
+`CandidateMethod.generate()` 和 `TransformRecord` 的落盘位置。新增、注册、Profile、测试与
+真实图 Smoke 的标准步骤只维护在 [`EXTENSION_GUIDE.md` §7](EXTENSION_GUIDE.md#7-新增重定向算法)。
 
 ## 19. 如何新增评分指标或 Detector
 
-新增指标应先进入 `compute_proxy_metrics()` 的结构化输出，再由新的不可变 Strategy 决定权重或
-门禁。不要在代码中按文件名或 Task ID 写特例。Detector Suite 在 `plugin_catalog.py` 以固定 ID
-注册；Strategy 只能引用白名单 ID，不能从 YAML 动态导入 Python。
+阅读评分先从 `evaluation.py::compute_proxy_metrics()` 开始；阅读检测器从
+`protection_detectors.py` 和 `plugin_catalog.py::built_in_plugin_catalog()` 开始。新增实现、
+注册、缺测语义、Strategy 版本和 Replay 步骤只维护在
+[`EXTENSION_GUIDE.md` §3～§5](EXTENSION_GUIDE.md#3-新增-detector-suite)。
 
 ## 20. 最小迁移清单
 

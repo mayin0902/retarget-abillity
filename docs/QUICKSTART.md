@@ -217,8 +217,8 @@ local_data\movie60-review-current\
 ```
 
 `--scene` 支持 `movie_poster`、`film_still`、`video_cover`、`person`、`product` 和
-`unspecified`。没传时会明确警告：新图没有场景类型，3.3 的场景化门禁不会触发。不要用
-`unspecified` 冒充已执行海报/人物专用 Rule。
+`unspecified`。没传时会明确警告：新图没有场景类型，当前 Strategy 的场景化门禁不会触发。
+不要用 `unspecified` 冒充已执行海报/人物专用 Rule。
 
 `--target` 是实际输出像素，格式固定为 `WIDTHxHEIGHT`。长期测试覆盖：
 
@@ -440,6 +440,11 @@ local_data/generation-provider-smoke/
 AIGC API 只新增 Adapter 并注册，详见 `EXTENSION_GUIDE.md`。部分厂商只接受 `1K/2K` 等尺寸
 档位，此时审计记录保存厂商实际返回尺寸；若下游要求精确像素尺寸，由 Adapter 或后续本地
 重定向步骤显式归一化，不能把请求尺寸冒充为实际尺寸。
+
+`generation run` 到“生成图片 + `execution.json`”为止，不会修改已有 Generation Run、
+Evaluation 或 Rule 决策。需要评价生成结果时，使用 `score reference` 或 Python
+`score_pair()` 比较原图与 AIGC 图；需要参与业务最终选择时，由上层编排把该评分与传统
+Rule Top1 比较后再形成路由结论。它不是一条隐式的“Agent + AIGC 自动路由”。
 
 ## 13. 常见错误
 

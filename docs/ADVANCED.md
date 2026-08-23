@@ -67,45 +67,23 @@ A/B/C/D 分数范围完全可配置，例如把 A 改为 80 分以上只需新�
 
 ## 5. 新增或替换 Rule 实现
 
-插件目录在 `plugin_catalog.py`，是受控白名单，不支持 YAML 任意 Python import。
+具体开发步骤只维护在 `EXTENSION_GUIDE.md` 的 Detector、Scorer 和 Rule 三节。本文只说明
+实现替换后的版本与 Replay 约束：插件目录在 `plugin_catalog.py`，是受控白名单，不支持 YAML
+任意 Python import；新实现使用新插件 ID 和新 Strategy，旧 Adapter 与旧 Bundle 保持可回放。
 
-### 新检测器套件
-
-1. 实现输入 RGB、输出 `tuple[RegionRecord,...]` 的 Detector Suite Adapter；
-2. 固定模型 ID/revision、阈值、运行时和本地权重审计；
-3. 注册新的 `detector_suite_plugin` ID；
-4. 添加原图/候选重复检测测试、缺模型失败测试和离线测试；
-5. 新 Strategy 引用该 ID，不删除旧 Adapter。
-
-### 新 Reference Scorer
-
-1. 实现与当前 Scorer 相同的结构化输入输出；
-2. 缺测保持 `None`，不能用 0 冒充；
-3. 硬失败、软分和等级门禁分层；
-4. 注册 `reference_scorer_plugin`；
-5. 对同一冻结 Run Replay 比较，而不是重新生成候选。
-
-### 新 Rule Selector
-
-Selector 输入完整 CandidateEvidence，输出每个 Candidate 恰好一次的完整排列。注册
-`rule_selector_plugin` 后，Evaluation 会在 `rule_selection.py` 统一校验并持久化；UI 和 Agent
-不会再自行排序。
+Detector Suite 变化若只影响评测证据，重跑 Evaluation；若生成算法也消费新的保护区域，才
+重跑 Generation。Reference Scorer 或 Rule Selector 变化使用同一冻结 Run 建新 Evaluation，
+并保持缺测为 `None`、完整候选排列和不可覆盖旧结果三项约束。
 
 ## 6. 新增重定向算法
 
-方法 Adapter 需实现统一 `generate(...) -> MethodOutput`：
-
-1. 新建 `src/retarget_agent/methods/<name>.py`；
-2. 声明稳定 `method_id/method_version`；
-3. 只消费共享 Analysis/importance/tolerance，不自行修改原图证据；
-4. 输出精确目标尺寸 RGB 和可审计 `TransformRecord`；
-5. 风险特征必须能解释算法失败，例如 seam importance、crop cut count、mesh Jacobian；
-6. 在方法注册表加入 ID；
-7. 新建 method profile 或 Strategy，不改历史 profile；
-8. 给正方形、横屏、竖屏、4:3、3:4 添加永久 Smoke。
+实现、注册与测试教程只维护在 `EXTENSION_GUIDE.md` §7。高级版本约束是：方法 Adapter 需实现
+统一 `generate(...) -> MethodOutput`，默认 Profile 的变化必须新建版本，不能改写历史 Run 的
+方法分母。
 
 默认 `retarget_default_v1` 的七方法与参数只由 `config.py` 的 profile 注册表提供，单图、批量
-和 RunConfig 共用，避免入口之间漂移。
+和 RunConfig 共用，避免入口之间漂移。算法实现改变候选像素，因此必须建新 Generation Run；
+不能把只重跑 Evaluation 当成算法验证。
 
 ## 7. Agent Skill、Knowledge 与 Prompt
 
@@ -152,31 +130,9 @@ loopback HTTP。没有显式 Profile 时 Agent 绝不运行。普通 `run image/
 
 ## 9. 可替换 AIGC Provider
 
-当前通用接缝位于 `providers/base.py`：调用方只提交 `AIGCGenerationRequest`，Provider Adapter
-实现 `capabilities()` 与 `generate()`。`plugin_catalog.py` 的 `generation_providers` 是唯一
-允许执行的注册表；当前内置 ID 为 `seedream_api`。上层编排不再直接 import SeedDream 类。
-
-```powershell
-# 不访问网络、不需要密钥，只检查命令与 Provider 注册
-.\.venv\Scripts\retarget-engine.exe generation run source.jpg `
-  --output-root local_data\generation-smoke `
-  --request-id request-001 --task-id task-001 `
-  --prompt-file prompt.txt
-
-# 真正调用；--execute 表示调用者已经完成业务侧素材授权
-$env:SEEDREAM_BASE_URL = "<endpoint>"
-$env:SEEDREAM_API_KEY = "<temporary-token>"
-$env:SEEDREAM_MODEL = "<model>"
-.\.venv\Scripts\retarget-engine.exe generation run source.jpg `
-  --output-root local_data\generation-smoke `
-  --request-id request-002 --task-id task-001 `
-  --prompt-file prompt.txt --execute `
-  --budget-cny 0.60 --timeout-seconds 300
-```
-
-通用执行层不判断素材是否允许外发；不同公司的业务规则不应写死在 Provider。预算和调用者
-幂等标签也都是可选项。强制通用项只有注册 Adapter、Adapter 请求校验、可配置超时、明确
-成功/失败、成功输出可解码，以及耗时和 SHA-256 记录。成本无法取得时保存 `null`。
+当前通用接缝位于 `providers/base.py`，唯一执行白名单是 `plugin_catalog.py` 的
+`generation_providers`。使用命令只维护在 `QUICKSTART.md` §12；新增 Adapter 的标准步骤只维护
+在 `EXTENSION_GUIDE.md` §2。通用执行层不会修改已有 Run/Evaluation，也不自动形成最终路由。
 
 旧 `aigc_experiment.py::run_seedream_plan()` 为历史 Movie60 回放保留兼容入口，但执行已经通过
 同一个 `generation_providers` 接缝，不再由实验编排直接构造 SeedDream Provider。新增或替换
