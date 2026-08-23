@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
+
+from .providers.base import AIGCGenerationRequest
 
 
 class RetargetApplicationService:
@@ -200,6 +204,33 @@ class RetargetApplicationService:
             source_audit_path,
             maximum_paid_calls=maximum_paid_calls,
         )
+
+    def execute_external_generation(
+        self,
+        request: AIGCGenerationRequest,
+        provider_id: str,
+        output_root: Path,
+        *,
+        execute: bool,
+        timeout_seconds: float = 300.0,
+        maximum_cost_cny: Decimal | None = None,
+        idempotency_key: str | None = None,
+        environ: Mapping[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Plan or execute one image through a registered AIGC provider."""
+
+        from .generation_execution import execute_generation
+
+        return execute_generation(
+            request,
+            provider_id,
+            output_root,
+            execute=execute,
+            timeout_seconds=timeout_seconds,
+            maximum_cost_cny=maximum_cost_cny,
+            idempotency_key=idempotency_key,
+            environ=environ,
+        ).model_dump(mode="json")
 
     def load_review_workspace(self, run_dir: Path, reviewer_id: str) -> dict[str, Any]:
         from .review import load_review_workspace

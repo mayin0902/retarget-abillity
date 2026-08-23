@@ -87,6 +87,7 @@ def test_builtin_catalog_exposes_only_allowlisted_ids() -> None:
     assert description["detector_suites"] == ("company_cpu_v2", "legacy_opencv_v1")
     assert "auto_proxy_v1" in description["reference_scorers"]
     assert "technical_no_reference_v1" in description["standalone_scorers"]
+    assert description["generation_providers"] == ("seedream_api",)
 
 
 def test_no_reference_metrics_do_not_claim_preservation_or_grade() -> None:

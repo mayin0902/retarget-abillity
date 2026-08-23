@@ -10,13 +10,18 @@ permissions:
 
 jobs:
   test:
+    name: Python ${{ matrix.python-version }}
     runs-on: windows-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install frozen development dependencies
         run: >-
@@ -24,8 +29,10 @@ jobs:
           -c requirements/constraints-py311-313.txt
           -e ".[dev]"
       - name: Ruff
+        if: matrix.python-version == '3.12'
         run: ruff check src tests scripts
       - name: Tests
         run: python -m pytest -q
       - name: Verify immutable strategy registry
+        if: matrix.python-version == '3.12'
         run: python -m pytest -q tests/test_strategy.py

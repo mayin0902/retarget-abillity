@@ -1,8 +1,13 @@
-"""Bounded SeedDream routing experiment for Movie Visual 60."""
+"""Legacy Movie60 SeedDream experiment kept for frozen replay compatibility.
+
+New integrations use the provider-neutral execution path in
+``generation_execution.py``.  This module retains the Movie60-specific plan,
+normalization and reporting contract, while its actual provider call is routed
+through the same registered AIGC adapter as the public API.
+"""
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
@@ -19,16 +24,14 @@ from PIL import Image, ImageOps
 
 from .agents import deterministic_ranking, evidence_from_metrics
 from .config import AnalysisConfig
-from .costing import BudgetLedger
 from .evaluation import EvaluationConfig, compute_proxy_metrics
 from .models import AnalysisArtifact, RunManifest, TaskSpec
 from .movie_visual60 import EGRESS_AUTHORIZATION
 from .protection_detectors import ProtectionDetectorSuite
-from .providers.seedream import (
-    SeedDreamGenerationRequest,
-    SeedDreamProvider,
-    SeedDreamProviderConfig,
-    SeedDreamProviderError,
+from .providers.base import (
+    AIGCGenerationRequest,
+    AIGCProviderError,
+    AIGCProviderRuntime,
 )
 from .storage import LocalArtifactStore
 from .strict_review import (
@@ -330,15 +333,6 @@ def plan_movie60_aigc(
     return report
 
 
-def _source_data_uri(path: Path, expected_sha256: str) -> str:
-    payload = path.read_bytes()
-    if hashlib.sha256(payload).hexdigest() != expected_sha256:
-        raise ValueError("source pixels do not match frozen sha256")
-    suffix = path.suffix.lower()
-    media = "image/png" if suffix == ".png" else "image/jpeg"
-    return f"data:{media};base64," + base64.b64encode(payload).decode("ascii")
-
-
 def _normalize_provider_output(source: Path, destination: Path) -> dict[str, Any]:
     with Image.open(source) as opened:
         native = ImageOps.exif_transpose(opened).convert("RGB")
@@ -378,16 +372,16 @@ def run_seedream_plan(
         (item for item in plan["entries"] if item["selected_for_paid_generation"]),
         key=lambda item: int(item["paid_priority"]),
     )[:limit]
-    provider = SeedDreamProvider(
-        SeedDreamProviderConfig.from_env(
-            size="2K",
-            watermark=False,
-            connect_timeout_seconds=10,
-            read_timeout_seconds=read_timeout_seconds,
-        ),
-        output_root=run_dir / "external-generation" / "provider-native",
-        cache_path=run_dir / "external-generation" / "provider-cache" / "seedream.json",
-        budget=BudgetLedger(budget_cny),
+    from .plugin_catalog import built_in_plugin_catalog
+
+    provider = built_in_plugin_catalog().generation_providers.get("seedream_api")(
+        AIGCProviderRuntime(
+            output_root=run_dir / "external-generation" / "provider-native",
+            cache_root=run_dir / "external-generation" / "provider-cache",
+            timeout_seconds=read_timeout_seconds,
+            maximum_cost_cny=budget_cny,
+            environ=dict(os.environ),
+        )
     )
     statuses: list[dict[str, Any]] = []
     for item in selected:
@@ -402,22 +396,18 @@ def run_seedream_plan(
         started = time.perf_counter()
         try:
             result = provider.generate(
-                SeedDreamGenerationRequest(
+                AIGCGenerationRequest(
                     task_id=task_id,
                     run_id=str(plan["run_id"]),
                     request_id=f"seedream-{task_id}",
-                    source_data_uri=_source_data_uri(source_path, task.source.sha256),
+                    source_path=source_path,
                     source_sha256=task.source.sha256,
-                    source_is_public=False,
-                    allow_data_egress=True,
-                    egress_authorization_basis=EGRESS_AUTHORIZATION,
                     target_width=1536,
                     target_height=1536,
                     prompt=str(plan.get("aigc_prompt") or SEEDREAM_PROMPT),
                     prompt_version=str(
                         plan.get("aigc_prompt_version") or PROMPT_VERSION
                     ),
-                    max_cost_cny=Decimal("0.60"),
                 )
             )
             evaluation_path = (
@@ -438,11 +428,11 @@ def run_seedream_plan(
                 "normalization": normalization,
                 "watermark": False,
             }
-        except SeedDreamProviderError as error:
+        except AIGCProviderError as error:
             status = {
                 "task_id": task_id,
                 "status": "failed",
-                "error_code": error.code.value,
+                "error_code": error.code,
                 "charge_may_have_occurred": error.charge_may_have_occurred,
                 "wall_seconds": time.perf_counter() - started,
                 "estimated_cost_min_cny": "0.30" if error.charge_may_have_occurred else "0.00",

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.1 - 2026-08-23
+
+- Add a provider-neutral external image-generation request/result contract, allowlisted
+  Provider registry and audited single-image executor with a side-effect-free preflight.
+- Adapt the existing SeedDream implementation to the common Provider seam while preserving the
+  immutable Movie60 experiment and its historical replay behavior.
+- Add `generation run` for explicit Provider execution, with configurable timeout and optional
+  budget/idempotency metadata; ordinary retarget workflows still never invoke paid APIs.
+- Document the complete AIGC call graph and add a standalone extension guide for Provider,
+  Detector, Scorer, Rule, Agent Skill/Knowledge/Prompt and retarget-method adapters.
+- Test the supported Python 3.11, 3.12 and 3.13 range in the Windows CI matrix.
+
+Movie60 images, human labels, machine ratings and UI assets remain the immutable v0.8.0/v4 data
+Release; this code-only update does not duplicate that 2.3 GiB asset set.
+
 ## 0.8.0 - 2026-08-23
 
 - Add stable in-memory `retarget_image`, `generate_candidates`, and `score_pair` APIs for

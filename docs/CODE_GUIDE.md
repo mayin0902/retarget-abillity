@@ -4,7 +4,7 @@
 函数开始看、数据怎样流动、只迁一部分代码需要什么”。算法原理和公式见
 [`ARCHITECTURE.md`](ARCHITECTURE.md)，安装与命令见 [`QUICKSTART.md`](QUICKSTART.md)。
 
-## 1. 先看这 8 个入口
+## 1. 先看这 9 个入口
 
 | 目标 | 首个文件 | 首个符号 |
 |---|---|---|
@@ -15,6 +15,7 @@
 | 理解七算法装配 | `src/retarget_agent/methods/__init__.py` | `built_in_methods()` |
 | 理解自动评分 | `src/retarget_agent/evaluation.py` | `compute_proxy_metrics()` |
 | 理解 Rule 排名 | `src/retarget_agent/rule_selection.py` | `build_rule_decisions()` |
+| 理解/替换 AIGC API | `src/retarget_agent/providers/base.py` | `AIGCProvider.generate()` |
 | 理解完整可审计流程 | `src/retarget_agent/runner.py` | `GenerationRunner.run()` |
 
 只想复用能力时先读 `api/`；需要 Run、复现、UI 或 Agent 时再进入 Runner 和 CLI。
@@ -289,13 +290,53 @@ Agent Replay 的输入包括原图、候选图、完整 Rule 排名、Rule Top1�
 和 Prompt。Agent 只能返回候选的完整排序、建议 Top1、置信度与理由；Schema 失败或证据矛盾时
 回退 Rule。Agent Run 是附加证据，不覆盖 Generation、Evaluation 或人工记录。
 
-## 16. UI 为什么与算法解耦
+## 16. AIGC Provider 调用链
+
+```text
+CLI / RetargetApplicationService
+        │ AIGCGenerationRequest + provider_id
+        v
+generation_execution.execute_generation()
+        │
+        ├─ execute=False：只验证 Provider 已注册，返回 planned，不读取密钥、不写文件
+        │
+        └─ execute=True
+             ├─ 校验本地源图 SHA-256
+             ├─ plugin_catalog.generation_providers.get(provider_id)
+             ├─ Factory(AIGCProviderRuntime)
+             ├─ Adapter.generate(request)
+             ├─ 校验输出路径、SHA-256、图片解码和实际尺寸
+             └─ executions/<request-id>.json
+```
+
+通用接口只有 `capabilities()` 和 `generate()`。`AIGCGenerationRequest` 包含源图、目标尺寸、
+Prompt 和稳定 ID；不包含 API Key，也不包含公司的素材外发规则。Endpoint、鉴权、模型名、
+请求 JSON、异步轮询和厂商错误由 Adapter 实现。
+
+`AIGCProviderRuntime` 提供输出目录、缓存目录和超时；预算、调用者幂等标签均可为 `None`。
+`AIGCProviderResult` 的成本字段也允许 `None`。通用执行模块一定记录耗时、输出 SHA-256 和
+明确成功/失败，因为后续评分必须能够定位同一张像素结果。
+
+当前 SeedDream 阅读顺序：
+
+1. `providers/base.py`：先理解稳定接口；
+2. `plugin_catalog.py::built_in_plugin_catalog()`：查看 `seedream_api` 注册；
+3. `providers/seedream.py::SeedDreamAIGCAdapter`：通用请求到厂商请求的映射；
+4. `providers/seedream.py::SeedDreamProvider`：HTTP、下载、内容校验和其自带的耐久幂等；
+5. `generation_execution.py`：调用方共有的审计记录；
+6. `service.py::execute_external_generation()` 和 CLI `generation run`：外部入口。
+
+历史 `aigc_experiment.py` 只保留 Movie60 冻结实验与报表兼容；其中的实际调用也已经通过
+`generation_providers` 接缝。新业务不能复制该实验文件来接新 API，应按
+`EXTENSION_GUIDE.md` 新增 Adapter。
+
+## 17. UI 为什么与算法解耦
 
 `review_workspace.py` 把 Run、Movie60 或外部候选转换为统一 Task/Candidate JSON；
 `unified_review_app.py` 只提供 HTTP；前端只读取统一模型和索引图片。更换算法、Strategy 或
 Agent Run 不需要改页面结构。
 
-## 17. 如何新增算法
+## 18. 如何新增算法
 
 1. 在 `methods/` 新建实现并满足 `CandidateMethod`；
 2. 在 `built_in_methods()` 注册稳定 ID；
@@ -303,13 +344,13 @@ Agent Run 不需要改页面结构。
 4. 为目标尺寸、失败隔离、Transform 风险写接口测试；
 5. 若改默认 Profile，新建版本并跑真实图片，不从程序化 Fixture 推导质量结论。
 
-## 18. 如何新增评分指标或 Detector
+## 19. 如何新增评分指标或 Detector
 
 新增指标应先进入 `compute_proxy_metrics()` 的结构化输出，再由新的不可变 Strategy 决定权重或
 门禁。不要在代码中按文件名或 Task ID 写特例。Detector Suite 在 `plugin_catalog.py` 以固定 ID
 注册；Strategy 只能引用白名单 ID，不能从 YAML 动态导入 Python。
 
-## 19. 最小迁移清单
+## 20. 最小迁移清单
 
 只迁图片处理：
 
@@ -338,7 +379,17 @@ retarget_agent/protection_detectors.py
 Movie60、Release 打包、Review UI、Agent、AIGC、Benchmark 和 GenerationRunner 都不是纯计算
 接口的必需依赖。
 
-## 20. 测试入口
+只迁 AIGC Provider 执行：
+
+```text
+retarget_agent/providers/base.py
+retarget_agent/generation_execution.py
+retarget_agent/plugin_catalog.py
+一个具体 Provider Adapter
+retarget_agent/registry.py
+```
+
+## 21. 测试入口
 
 ```powershell
 # Public API 与 Analyzer Core
@@ -349,6 +400,9 @@ python -m pytest -q tests\test_methods.py
 
 # 评分与插件
 python -m pytest -q tests\test_evaluation.py tests\test_plugins_and_image_scoring.py
+
+# 可替换 AIGC Provider（全部使用 Fake，不产生费用）
+python -m pytest -q tests\test_generation_providers.py tests\test_seedream_provider.py
 
 # 完整回归
 python -m pytest -q

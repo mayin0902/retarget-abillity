@@ -16,13 +16,13 @@ from .models import (
     HumanGuidance,
     MethodConfig,
     MetricBundle,
-    ProviderCapability,
     RegionRecord,
     ReviewEvent,
     RunManifest,
     TaskSpec,
     TransformRecord,
 )
+from .providers.base import AIGCProvider
 
 
 @dataclass(slots=True)
@@ -132,11 +132,9 @@ class AgentPlugin(Protocol):
     agent_version: str
 
 
-class ExternalAIGCProvider(Protocol):
-    provider_id: str
-    provider_version: str
-
-    def capabilities(self) -> ProviderCapability: ...
+# Backwards-compatible name retained for embedders that imported the 0.8
+# capability-only protocol.  The current interface also requires ``generate``.
+ExternalAIGCProvider = AIGCProvider
 
 
 class WorkflowBackend(Protocol):

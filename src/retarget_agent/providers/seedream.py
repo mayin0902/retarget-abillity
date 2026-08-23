@@ -40,6 +40,12 @@ from retarget_agent.costing import (
     InvalidBudgetTransitionError,
 )
 from retarget_agent.models import SHA256_PATTERN, ProviderCapability, validate_id
+from retarget_agent.providers.base import (
+    AIGCGenerationRequest,
+    AIGCProviderError,
+    AIGCProviderResult,
+    AIGCProviderRuntime,
+)
 
 _ESTIMATED_COST_MIN_CNY = Decimal("0.30")
 _ESTIMATED_COST_MAX_CNY = Decimal("0.60")
@@ -951,3 +957,133 @@ def _http_status_charge_unknown(status_code: int) -> bool:
     """Treat timeout and server failures as possibly billed after accepting work."""
 
     return status_code in {408, 504} or status_code >= 500
+
+
+class SeedDreamAIGCAdapter:
+    """Map the provider-neutral generation interface to the verified SeedDream client."""
+
+    provider_id = _PROVIDER_ID
+    provider_version = "2.0.0"
+
+    def __init__(
+        self,
+        runtime: AIGCProviderRuntime,
+        *,
+        legacy_provider: SeedDreamProvider | None = None,
+    ) -> None:
+        self._runtime = runtime
+        if legacy_provider is not None:
+            self._provider = legacy_provider
+            return
+        maximum_cost = runtime.maximum_cost_cny or _ESTIMATED_COST_MAX_CNY
+        config = SeedDreamProviderConfig.from_env(
+            environ=runtime.environ,
+            size="2K",
+            watermark=False,
+            connect_timeout_seconds=10.0,
+            read_timeout_seconds=runtime.timeout_seconds,
+        )
+        self._provider = SeedDreamProvider(
+            config,
+            output_root=runtime.output_root,
+            cache_path=runtime.cache_root / "seedream.json",
+            budget=BudgetLedger(maximum_cost),
+        )
+
+    def capabilities(self) -> ProviderCapability:
+        capability = self._provider.capabilities()
+        return capability.model_copy(update={"provider_version": self.provider_version})
+
+    def generate(self, request: AIGCGenerationRequest) -> AIGCProviderResult:
+        source_url = request.source_url
+        source_data_uri = None
+        if request.source_path is not None:
+            source_data_uri = _local_image_data_uri(request.source_path, request.source_sha256)
+        maximum_cost = self._runtime.maximum_cost_cny or _ESTIMATED_COST_MAX_CNY
+        try:
+            result = self._provider.generate(
+                SeedDreamGenerationRequest(
+                    task_id=request.task_id,
+                    run_id=request.run_id,
+                    request_id=request.request_id,
+                    source_url=source_url,
+                    source_data_uri=source_data_uri,
+                    source_sha256=request.source_sha256,
+                    source_is_public=source_url is not None,
+                    allow_data_egress=True,
+                    egress_authorization_basis="user_explicit_generation_execute",
+                    target_width=request.target_width,
+                    target_height=request.target_height,
+                    target_format=request.target_format,
+                    prompt=request.prompt,
+                    prompt_version=request.prompt_version,
+                    max_cost_cny=maximum_cost,
+                )
+            )
+        except SeedDreamProviderError as error:
+            raise AIGCProviderError(
+                error.code.value,
+                str(error),
+                charge_may_have_occurred=error.charge_may_have_occurred,
+            ) from error
+        return AIGCProviderResult(
+            provider_id=self.provider_id,
+            provider_version=self.provider_version,
+            task_id=request.task_id,
+            request_id=request.request_id,
+            output_path=result.output_path,
+            output_sha256=result.output_sha256,
+            media_type=result.media_type,
+            width=result.width,
+            height=result.height,
+            cache_hit=result.cache_hit,
+            idempotency_key=result.request_hash,
+            estimated_cost_min_cny=result.estimated_cost_min_cny,
+            estimated_cost_max_cny=result.estimated_cost_max_cny,
+            actual_cost_cny=result.actual_cost_cny,
+        )
+
+
+def create_seedream_aigc_adapter(runtime: AIGCProviderRuntime) -> SeedDreamAIGCAdapter:
+    """Built-in catalog factory; credentials are resolved only at execution time."""
+
+    return SeedDreamAIGCAdapter(runtime)
+
+
+def _local_image_data_uri(path: Path, expected_sha256: str) -> str:
+    try:
+        data = path.resolve().read_bytes()
+    except OSError as error:
+        raise AIGCProviderError("INVALID_REQUEST", "local source image is unavailable") from error
+    if hashlib.sha256(data).hexdigest() != expected_sha256:
+        raise AIGCProviderError(
+            "INVALID_REQUEST", "local source image does not match source_sha256"
+        )
+    if len(data) > 10 * 1024 * 1024:
+        raise AIGCProviderError(
+            "INVALID_REQUEST", "local source image exceeds the SeedDream 10 MiB input bound"
+        )
+    try:
+        with Image.open(BytesIO(data)) as image:
+            image_format = image.format or ""
+            image.verify()
+    except (OSError, UnidentifiedImageError) as error:
+        raise AIGCProviderError("INVALID_REQUEST", "local source is not a valid image") from error
+    media_type = _FORMAT_TO_MIME.get(image_format)
+    if media_type is None:
+        raise AIGCProviderError(
+            "INVALID_REQUEST", "local source image format is not supported by SeedDream"
+        )
+    return f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+__all__ = [
+    "SeedDreamAIGCAdapter",
+    "SeedDreamErrorCode",
+    "SeedDreamGenerationRequest",
+    "SeedDreamGenerationResult",
+    "SeedDreamProvider",
+    "SeedDreamProviderConfig",
+    "SeedDreamProviderError",
+    "create_seedream_aigc_adapter",
+]

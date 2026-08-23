@@ -48,6 +48,38 @@ def test_public_run_help_exposes_scene_and_config_owned_target_default() -> None
     assert "configs/default.yaml" in output
 
 
+def test_generation_run_preflight_needs_no_secret_or_business_egress_manifest(
+    tmp_path: Path,
+) -> None:
+    image = tmp_path / "poster.png"
+    prompt = tmp_path / "prompt.txt"
+    output = tmp_path / "external-generation"
+    Image.new("RGB", (40, 60), "red").save(image)
+    prompt.write_text("保留主体与重要文字。\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "generation",
+            "run",
+            str(image),
+            "--output-root",
+            str(output),
+            "--request-id",
+            "request-001",
+            "--task-id",
+            "poster-001",
+            "--prompt-file",
+            str(prompt),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert '"status": "planned"' in result.stdout
+    assert '"executed": false' in result.stdout
+    assert not output.exists()
+
+
 def test_unspecified_scene_warns_before_public_workflow(
     tmp_path: Path, monkeypatch
 ) -> None:

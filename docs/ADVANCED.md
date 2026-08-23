@@ -118,9 +118,11 @@ Skill 规定行为、排序优先级、AIGC 门禁和理由代码；Knowledge �
 4. 把 Skill 和 Knowledge 两个文件都加入 Strategy SHA；
 5. 在 Evaluation/Agent Run 中一起快照。
 
-需要迭代时：新建 Skill/Knowledge 版本，再由新 Strategy 引用；不要修改已发布 3.3。当前
-仓库还保留独立中文 v8 Skill/Knowledge 作为下一版素材，但 current 3.3 的既有 Agent 结果
-没有因此被伪装成“已重跑”。
+需要迭代时：新建 Skill/Knowledge 版本，再由新 Strategy 引用；不要修改已冻结版本。当前
+唯一 active Strategy 是 `retarget@1.0.0`，它已经引用中文 v8 Skill/Knowledge；Movie60 v4
+记录的当前 Replay 是 `movie60-chinese-agent-v8-all60-final-v2-20260823`，60/60 请求均通过
+Schema 校验。该 Replay 的 `top1_change_count=0`，人工非退化门禁通过，但不能据此宣称 Agent
+准确率超过 Rule；它证明的是全量执行稳定且没有破坏已有人工基准。
 
 Agent Backend 输入还必须包含 Rule Top1 和完整 Rule 排名。返回 JSON 必须是候选的精确全
 排列，原图不能进入排名；Schema 错误按有限次数重试，仍失败则回退 Rule并保留错误证据。
@@ -148,7 +150,39 @@ $env:RETARGET_AGENT_API_KEY = "<临时Token>"
 loopback HTTP。没有显式 Profile 时 Agent 绝不运行。普通 `run image/batch` 固定
 `allow_external_aigc=False`，所以 Agent 建议外部生成也不会自动产生付费调用。
 
-## 9. 手工 Dataset、Generation 与 Evaluation
+## 9. 可替换 AIGC Provider
+
+当前通用接缝位于 `providers/base.py`：调用方只提交 `AIGCGenerationRequest`，Provider Adapter
+实现 `capabilities()` 与 `generate()`。`plugin_catalog.py` 的 `generation_providers` 是唯一
+允许执行的注册表；当前内置 ID 为 `seedream_api`。上层编排不再直接 import SeedDream 类。
+
+```powershell
+# 不访问网络、不需要密钥，只检查命令与 Provider 注册
+.\.venv\Scripts\retarget-engine.exe generation run source.jpg `
+  --output-root local_data\generation-smoke `
+  --request-id request-001 --task-id task-001 `
+  --prompt-file prompt.txt
+
+# 真正调用；--execute 表示调用者已经完成业务侧素材授权
+$env:SEEDREAM_BASE_URL = "<endpoint>"
+$env:SEEDREAM_API_KEY = "<temporary-token>"
+$env:SEEDREAM_MODEL = "<model>"
+.\.venv\Scripts\retarget-engine.exe generation run source.jpg `
+  --output-root local_data\generation-smoke `
+  --request-id request-002 --task-id task-001 `
+  --prompt-file prompt.txt --execute `
+  --budget-cny 0.60 --timeout-seconds 300
+```
+
+通用执行层不判断素材是否允许外发；不同公司的业务规则不应写死在 Provider。预算和调用者
+幂等标签也都是可选项。强制通用项只有注册 Adapter、Adapter 请求校验、可配置超时、明确
+成功/失败、成功输出可解码，以及耗时和 SHA-256 记录。成本无法取得时保存 `null`。
+
+旧 `aigc_experiment.py::run_seedream_plan()` 为历史 Movie60 回放保留兼容入口，但执行已经通过
+同一个 `generation_providers` 接缝，不再由实验编排直接构造 SeedDream Provider。新增或替换
+API 的完整步骤见 `EXTENSION_GUIDE.md`。
+
+## 10. 手工 Dataset、Generation 与 Evaluation
 
 标准 Dataset 是：
 
@@ -169,7 +203,7 @@ Run 配置是 `run.yaml`。完整手工流程：
 Evaluation 会冻结 Strategy 和 Rule 决策，但不会重新生成图片。若同一 Evaluation ID 已存在，
 命令拒绝覆盖。
 
-## 10. 哪些修改需要重跑
+## 11. 哪些修改需要重跑
 
 | 修改 | Generation | Evaluation | Agent Run | 人工复核 |
 |---|---:|---:|---:|---:|
@@ -182,7 +216,7 @@ Evaluation 会冻结 Strategy 和 Rule 决策，但不会重新生成图片。�
 
 `*` 若算法本身也依赖该检测器的新原图保护区域，则 Generation 也必须重跑。
 
-## 11. 外部候选导入
+## 12. 外部候选导入
 
 ```text
 D:\review-case\
@@ -201,9 +235,12 @@ D:\review-case\
 导入只复制并哈希图片，不制造 Rule/Agent 证据。要获得 Reference 分数，使用 `score reference`；
 要获得完整七方法与 Rule 排名，使用 `run image`。
 
-## 12. Release 和数据边界
+## 13. Release 和数据边界
 
-- Git：代码、配置、不可变策略、测试、小型 manifest 和四份主文档；
+- 当前 `main` 软件版本为 0.8.1；它新增通用 AIGC Provider 接缝和 Python 三版本 CI；
+- 当前 Movie60 数据包仍是公开 Release `v0.8.0` / Movie60 v4，因为本轮没有修改 UI、图片、
+  人工标签或机器评价资产；软件版本前进不要求复制一份完全相同的 2.3 GiB 数据包；
+- Git：代码、配置、不可变策略、测试、小型 manifest 和当前主文档；
 - 受控 Movie60 Release：经授权像素、处理结果、机器/人工评审和必要说明；其可见性必须
   与素材再分发权限一致；
 - 本地忽略：模型权重、Run、缓存、Token、临时实验和不可再分发素材。
@@ -212,7 +249,7 @@ D:\review-case\
 通过。Movie60 数据 Release 不因纯代码升级自动覆盖；需要重打包时创建新标签并校验资产，
 保留旧标签。
 
-### 12.1 当前与旧打包入口
+### 13.1 当前与旧打包入口
 
 - 当前唯一推荐入口：`scripts/package_movie60_review_v4.py`；v3 打包器只用于重现旧资产；
 - 公共确定性 ZIP/SHA 工具：`scripts/release_packaging.py`；
@@ -222,7 +259,7 @@ D:\review-case\
 `scripts/materialize_review.ps1`，它会优先检查
 `local_data/release_assets/<MOVIE60_RELEASE tag>/` 的三个原始资产。
 
-## 13. 公司网络模型下载决策
+## 14. 公司网络模型下载决策
 
 **DEC-20260821-01｜公司网络下固定模型下载 SSL 降级策略**
 
@@ -245,7 +282,7 @@ AIGC 或任意用户 URL。
 预下载的 YuNet。`datasets/analyzer_models_v1/model_manifest.csv` 中 PPOCRv3、CRNN、YOLOX
 仅供显式历史回放，不再由正常 Bootstrap 下载。
 
-## 14. 常见故障
+## 15. 常见故障
 
 - `.venv` 从其他电脑复制：删除或移走后重新 Bootstrap；
 - 新 Run UI 缺候选：检查 `candidate.json`；失败候选应显示 N/A，不能被隐藏；

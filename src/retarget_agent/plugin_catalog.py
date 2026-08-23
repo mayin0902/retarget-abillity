@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .providers.base import AIGCProviderFactory
 from .registry import Registry
 
 DetectorSuiteFactory = Callable[[Any], Any]
@@ -28,6 +29,7 @@ class PluginCatalog:
     standalone_scorers: Registry[StandaloneScorer]
     selectors: Registry[SelectorImplementation]
     agent_backends: Registry[AgentBackendFactory]
+    generation_providers: Registry[AIGCProviderFactory]
 
     @classmethod
     def empty(cls) -> PluginCatalog:
@@ -37,6 +39,7 @@ class PluginCatalog:
             standalone_scorers=Registry("standalone-scorer"),
             selectors=Registry("selector"),
             agent_backends=Registry("agent-backend"),
+            generation_providers=Registry("generation-provider"),
         )
 
     def describe(self) -> dict[str, tuple[str, ...]]:
@@ -46,6 +49,7 @@ class PluginCatalog:
             "standalone_scorers": self.standalone_scorers.ids(),
             "selectors": self.selectors.ids(),
             "agent_backends": self.agent_backends.ids(),
+            "generation_providers": self.generation_providers.ids(),
         }
 
 
@@ -60,6 +64,7 @@ def built_in_plugin_catalog() -> PluginCatalog:
         compute_no_reference_metrics,
     )
     from .protection_detectors import CompanyCpuProtectionDetectorSuite, ProtectionDetectorSuite
+    from .providers.seedream import create_seedream_aigc_adapter
     from .rule_anchored_review import QwenRuleAnchoredReviewAdapter
     from .selector import select_by_technical_risk
     from .strict_review import StrictVisionReviewBackend
@@ -78,6 +83,7 @@ def built_in_plugin_catalog() -> PluginCatalog:
     catalog.agent_backends.register(
         "openai_compatible_image_review_v1", OpenAICompatibleImageReviewBackend
     )
+    catalog.generation_providers.register("seedream_api", create_seedream_aigc_adapter)
     return catalog
 
 

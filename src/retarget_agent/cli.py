@@ -6,6 +6,7 @@ import json
 import threading
 import webbrowser
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated
 
@@ -542,6 +543,84 @@ def generation_plan(
         maximum_paid_calls=maximum_paid_calls,
     )
     _echo_json(result)
+
+
+@generation_app.command("run")
+def generation_run(
+    source_image: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, readable=True),
+    ],
+    output_root: Annotated[Path, typer.Option("--output-root")],
+    request_id: Annotated[str, typer.Option("--request-id")],
+    task_id: Annotated[str, typer.Option("--task-id")],
+    prompt_file: Annotated[
+        Path,
+        typer.Option("--prompt-file", exists=True, dir_okay=False, readable=True),
+    ],
+    provider_id: Annotated[
+        str,
+        typer.Option("--provider", help="Registered generation provider ID."),
+    ] = "seedream_api",
+    run_id: Annotated[str, typer.Option("--run-id")] = "external-generation",
+    target: Annotated[
+        str,
+        typer.Option("--target", help="Target WIDTHxHEIGHT."),
+    ] = "1536x1536",
+    prompt_version: Annotated[str, typer.Option("--prompt-version")] = "manual-v1",
+    execute: Annotated[
+        bool,
+        typer.Option(
+            "--execute",
+            help="Actually call the provider; absence performs a side-effect-free preflight.",
+        ),
+    ] = False,
+    timeout_seconds: Annotated[
+        float,
+        typer.Option("--timeout-seconds", min=1.0),
+    ] = 300.0,
+    budget_cny: Annotated[
+        float | None,
+        typer.Option("--budget-cny", min=0.0, help="Optional hard cost limit."),
+    ] = None,
+    idempotency_key: Annotated[
+        str | None,
+        typer.Option("--idempotency-key", help="Optional caller idempotency label."),
+    ] = None,
+) -> None:
+    """Plan or execute one provider-neutral external image generation request."""
+    from .hashing import sha256_file
+    from .providers.base import AIGCGenerationRequest
+    from .service import RetargetApplicationService
+    from .simple_workflow import parse_target
+
+    width, height = parse_target(target)
+    prompt = prompt_file.read_text(encoding="utf-8").strip()
+    if not prompt:
+        raise typer.BadParameter("prompt file must not be empty", param_hint="--prompt-file")
+    request = AIGCGenerationRequest(
+        task_id=task_id,
+        run_id=run_id,
+        request_id=request_id,
+        source_path=source_image.resolve(),
+        source_sha256=sha256_file(source_image),
+        target_width=width,
+        target_height=height,
+        prompt=prompt,
+        prompt_version=prompt_version,
+    )
+    result = RetargetApplicationService.default().execute_external_generation(
+        request,
+        provider_id,
+        output_root,
+        execute=execute,
+        timeout_seconds=timeout_seconds,
+        maximum_cost_cny=None if budget_cny is None else Decimal(str(budget_cny)),
+        idempotency_key=idempotency_key,
+    )
+    _echo_json(result)
+    if result["status"] == "failed":
+        raise typer.Exit(1)
 
 
 @review_app.command("web")

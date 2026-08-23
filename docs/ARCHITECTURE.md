@@ -17,6 +17,7 @@ Rule/Agent 都不是人工金标；统一 UI 用于最终人工复核和后续�
 - **Candidate**：一种方法对一个 Task 的不可变输出；技术成功不代表业务质量通过；
 - **Rule**：对冻结 Candidate 执行的确定性指标、门禁和完整排序；
 - **Agent**：读取原图、候选、Rule 排名和冻结 Skill/Knowledge 后给出的视觉语义建议；
+- **AIGC Provider**：把统一生成请求映射到某个外部图片生成接口的 Adapter；是否调用由上层显式决定；
 - **Review**：人工对冻结 Candidate 给出的 A/B/C/D 和理由；大模型预审不属于人工金标；
 - **Route Result**：Rule 主选、可选 Agent 建议与安全回退共同形成的最终选择。
 
@@ -48,6 +49,11 @@ Evaluation
                ├─ Skill + 案例 Knowledge + Prompt
                └─ 中文建议、完整候选排序、置信度、理由代码
           │
+          └─ 可选显式 AIGC
+               ├─ Generation Plan 或单次 AIGCGenerationRequest
+               ├─ generation_providers 注册表选择 Adapter
+               └─ 图片结果 + SHA-256 + 耗时 + 可选成本
+          │
           v
 ReviewWorkspaceAdapter ──> FastAPI ──> 浏览器人工评审页
           │                                  │
@@ -67,6 +73,8 @@ Adapter 负责把不同来源转换成同一界面模型。这样算法目录变
 - `rule_selection.py`：Rule 排名唯一接口，Evaluation、Agent 和 UI 共用；
 - `strategy.py`：加载、校验、哈希、快照 Strategy/Prompt/Skill/Knowledge；
 - `agents.py`：消费冻结证据，不生成或改写传统候选；
+- `generation_execution.py`：Provider 无关的单次执行、输出校验和审计记录；
+- `providers/base.py`：最小 `AIGCProvider.generate()` 接缝；`providers/seedream.py` 是一个 Adapter；
 - `review_workspace.py`：Movie60、Run、外部候选的统一后端 Adapter；
 - `unified_review_app.py`：本机 HTTP 和页面资源，不承载评分规则。
 
@@ -201,7 +209,8 @@ anisotropy = largest_singular_value(J) / smallest_singular_value(J)
 候选清晰度、边缘密度、HSV 颜色直方图、Hough 结构线、ORB 局部特征和变换安全共同作为
 软证据。裁剪/重排天然改变像素位置，因此颜色、线条和 ORB 不能单独做硬失败。
 
-对缺测指标，`weighted_mean` 只在已观测项上重新归一化权重。3.3 的层级公式为：
+对缺测指标，`weighted_mean` 只在已观测项上重新归一化权重。当前
+`retarget@1.0.0` 继承 `movie60@3.3.0` 的实际层级公式为：
 
 ```text
 Content = weighted_mean(
@@ -221,7 +230,7 @@ Quality = 100 × weighted_mean(
 注意：`TransformSafety` 是 `VisualIntegrity` 内部的 0.20，不是第四个顶层权重。最终分数
 限制在 0～100，不因方法或场景额外奖励。
 
-当前 3.3 数值区间：A≥89，52≤B<89，42≤C<52，D<42。随后应用两类可解释规则：
+当前 `retarget@1.0.0` 数值区间：A≥89，52≤B<89，42≤C<52，D<42。随后应用两类可解释规则：
 
 1. 回归惩罚：例如关键文字、人脸或严重拉伸证据只扣声明的分值；
 2. 等级门禁：例如主人物/人脸几乎消失封顶 D，场景+方法+多条件组合可封顶 C/D。
@@ -261,11 +270,15 @@ Agent 输入包含：原图/候选总览、每个候选的结构化 Rule 证据�
 当前生产语义仍是 `advisory_only`：Agent 可更主动提出挑战，但没有独立人评证据时不会静默
 覆盖 Rule。AIGC 也不会由普通工作流自动调用。
 
+当前 Movie60 v4 的中文 v8 Replay 已完成 60/60 Schema 有效调用，人工非退化门禁通过；但
+`top1_change_count=0`，在 18 个已有人工 Task 上 Agent 与 Rule 都命中人工最佳 13/18。因此
+当前结论是“Agent 全量运行稳定且未使基准退化”，不是“Agent 已经比 Rule 更准确”。
+
 ### 8.1 新图场景怎样进入 Rule
 
 Movie60 Dataset 已冻结 `movie_poster`、`film_still`、`video_cover`、`person` 等场景。普通
 `run image/batch` 通过显式 `--scene` 把场景写入新 Dataset 的 `sources.csv`，Evaluation
-读取同一 `TaskSpec.source.scene_category` 后才会应用 3.3 中的场景化门禁。
+读取同一 `TaskSpec.source.scene_category` 后才会应用 `retarget@1.0.0` 继承的场景化门禁。
 
 省略 `--scene` 会冻结为 `unspecified` 并打印 warning；这时通用分数和门禁仍工作，但
 `movie_poster + crop` 等场景规则不会触发。当前不引入自动场景分类模型，避免把未经验证的
@@ -273,7 +286,8 @@ Movie60 Dataset 已冻结 `movie_poster`、`film_still`、`video_cover`、`perso
 
 ## 9. 可插拔接缝
 
-Detector Suite、Reference/Standalone Scorer、Rule Selector、Agent Backend 与方法实现均通过
+Detector Suite、Reference/Standalone Scorer、Rule Selector、Agent Backend、Generation
+Provider 与方法实现均通过
 `plugin_catalog.py` 的白名单注册。Strategy 只能引用允许的插件 ID，不允许从 YAML 任意导入
 Python。参数/阈值调整新建 Strategy 目录；实现替换新增 Adapter 并注册。具体步骤见
-`ADVANCED.md`。
+`ADVANCED.md` 和 `EXTENSION_GUIDE.md`。

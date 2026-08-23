@@ -45,6 +45,9 @@ powershell -ExecutionPolicy Bypass -File scripts\materialize_review.ps1
 `--agent-profile configs\agent-profile.private.yaml` 显式启用。新图应显式传 `--scene`；省略时
 会冻结为 `unspecified` 并提示场景化 Strategy 门禁不会生效。
 
+外部生图使用可替换 Provider。`generation run` 默认只做无网络 Preflight；只有显式增加
+`--execute` 才调用所选 Adapter。接入其他公司 AIGC API 的步骤见 `EXTENSION_GUIDE.md`。
+
 ## Python 内存接口
 
 ```python
@@ -74,6 +77,7 @@ if candidate.image is not None:
 - [REVIEW_AND_SCORING](docs/REVIEW_AND_SCORING.md)：打开 UI、自动评分、人工结果位置。
 - [ARCHITECTURE](docs/ARCHITECTURE.md)：保护分析、七算法、Rule、Agent 和统一评审接口。
 - [CODE_GUIDE](docs/CODE_GUIDE.md)：逐函数阅读路径、Python Public API 与最小迁移清单。
+- [EXTENSION_GUIDE](docs/EXTENSION_GUIDE.md)：新增算法、Rule、Agent、Detector 和替换 AIGC API。
 - [ADVANCED](docs/ADVANCED.md)：Strategy、插件、Replay、Agent Profile 与版本追溯。
 
 当前唯一 active Strategy 由 `strategies/registry.yaml` 决定；当前交付事实见

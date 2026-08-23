@@ -149,8 +149,10 @@ powershell -ExecutionPolicy Bypass -File scripts\materialize_review.ps1
 脚本从 `MOVIE60_RELEASE.json` 指向的 GitHub Release 下载当前资产，按随包
 `SHA256SUMS.txt` 校验 SHA-256，再解压到
 Git 忽略目录 `local_data\movie60-review-current`。已有且校验通过时脚本会直接复用，不重复
-下载。`v0.8.0` 的 Wheel、Movie60 v4 core、完整 evidence 和校验文件位于同一个 Release；
-`v0.7.1`/Movie60 v3 和更早的 Pre-release 只保留作历史追溯。
+下载。`v0.8.0` Release 中的 Movie60 v4 core、完整 evidence 和校验文件仍是当前数据资产；
+其中同时保存的 `0.8.0` Wheel 只用于重现该历史软件版本。Clone 当前 `main` 后应按第 3 节
+Bootstrap 安装 `0.8.1` 源码，不要用旧 Wheel 覆盖当前环境。`v0.7.1`/Movie60 v3 和更早的
+Pre-release 只保留作历史追溯。
 
 Release 的可见性由 GitHub 仓库和 Release 状态决定。Movie60 含受控素材时，维护者应使用
 私有仓库或 Draft Release；不要因为代码仓可公开就默认素材也允许公开再分发。
@@ -383,7 +385,63 @@ $env:RETARGET_AGENT_API_KEY = "<本次会话Token>"
 Profile 与 Token 都不应提交。未传 `--agent-profile` 时 Agent 调用次数为 0；普通工作流也
 不会自动调用付费 AIGC。
 
-## 12. 常见错误
+## 12. 显式调用可替换 AIGC Provider
+
+先确认 Provider 已注册：
+
+```powershell
+.\.venv\Scripts\retarget-engine.exe plugins list
+```
+
+第一次只做 Preflight。下面命令不访问网络、不读取 API Key、不创建输出目录：
+
+```powershell
+.\.venv\Scripts\retarget-engine.exe generation run `
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg" `
+  --provider seedream_api `
+  --output-root "local_data\generation-provider-smoke" `
+  --request-id "seedream-preflight-001" `
+  --task-id "poster-001" `
+  --target 1536x1536 `
+  --prompt-file "strategies\retarget\v1\prompts\seedream-generation.txt"
+```
+
+输出 `status=planned` 表示命令和 Provider ID 有效，不代表 API 配置或生图质量已经验证。
+
+真正调用时，在当前 PowerShell 临时配置该 Adapter 需要的环境变量，并显式增加 `--execute`：
+
+```powershell
+$env:SEEDREAM_BASE_URL = "<负责人提供的 HTTPS Endpoint>"
+$env:SEEDREAM_API_KEY = "<本次会话 Token>"
+$env:SEEDREAM_MODEL = "<负责人确认的模型标识>"
+
+.\.venv\Scripts\retarget-engine.exe generation run `
+  "local_data\movie60-review-current\all60\tasks\poster_001__square-1536\00_source.jpg" `
+  --provider seedream_api `
+  --output-root "local_data\generation-provider-smoke" `
+  --request-id "seedream-paid-001" `
+  --task-id "poster-001" `
+  --target 1536x1536 `
+  --prompt-file "strategies\retarget\v1\prompts\seedream-generation.txt" `
+  --execute --budget-cny 0.60 --timeout-seconds 300
+```
+
+`--execute` 表示调用者已经按公司要求确认素材可以发送给所选 API；通用 Provider 不内置某一
+套业务素材审批规则。`--budget-cny` 和 `--idempotency-key` 都是可选控制。成功或失败都会写入：
+
+```text
+local_data/generation-provider-smoke/
+├── executions/<request-id>.json
+├── provider-artifacts/<provider-id>/
+└── provider-cache/
+```
+
+执行记录包含耗时、输出 Hash、图片尺寸、错误和可取得的成本，不保存 API Key。接入另一家
+AIGC API 只新增 Adapter 并注册，详见 `EXTENSION_GUIDE.md`。部分厂商只接受 `1K/2K` 等尺寸
+档位，此时审计记录保存厂商实际返回尺寸；若下游要求精确像素尺寸，由 Adapter 或后续本地
+重定向步骤显式归一化，不能把请求尺寸冒充为实际尺寸。
+
+## 13. 常见错误
 
 - `py -3.12` 不存在：先安装 Python 3.12，重新打开 PowerShell；
 - `.venv exists but has no Windows Python`：把损坏目录改名保留，再重新 Bootstrap；
