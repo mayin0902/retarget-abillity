@@ -25,6 +25,129 @@ function Invoke-Checked {
     }
 }
 
+function Invoke-NativeCapture {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [switch]$HideOutput
+    )
+    $PreviousPreference = $ErrorActionPreference
+    $OutputLines = [System.Collections.Generic.List[string]]::new()
+    try {
+        # Native stderr is diagnostic output here; the exit code decides success.
+        $ErrorActionPreference = 'Continue'
+        & $Executable @Arguments 2>&1 | ForEach-Object {
+            $Line = $_.ToString()
+            $OutputLines.Add($Line)
+            if (-not $HideOutput) {
+                Write-Host $Line
+            }
+        }
+        $ExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $PreviousPreference
+    }
+    return [PSCustomObject]@{
+        ExitCode = $ExitCode
+        Output = $OutputLines.ToArray()
+    }
+}
+
+function Test-PipSslFailure {
+    param([Parameter(Mandatory = $true)][string[]]$Output)
+    $CombinedOutput = $Output -join "`n"
+    return $CombinedOutput -match (
+        '(?i)CERTIFICATE_VERIFY_FAILED|' +
+        'SSLCertVerificationError|' +
+        'certificate verify failed|' +
+        'self[- ]signed certificate'
+    )
+}
+
+function Get-PipTrustedHosts {
+    param([Parameter(Mandatory = $true)][string[]]$Text)
+    $Hosts = [System.Collections.Generic.List[string]]::new()
+    $CombinedText = $Text -join "`n"
+    $Patterns = @(
+        '(?i)https?://(?:[^@\s/]+@)?(?<host>\[[^\]]+\]|[^/:\s''"<>)`,;]+)(?::\d+)?',
+        '(?i)\bhost\s*=\s*[''"](?<host>[^''"]+)'
+    )
+    foreach ($Pattern in $Patterns) {
+        foreach ($Match in [regex]::Matches($CombinedText, $Pattern)) {
+            $HostName = $Match.Groups['host'].Value.Trim('[', ']').Trim().ToLowerInvariant()
+            if (
+                $HostName -match '^[a-z0-9.-]+$' -and
+                $HostName -notmatch '^\.' -and
+                $HostName -notmatch '\.$' -and
+                $HostName -notmatch '\.\.' -and
+                -not $Hosts.Contains($HostName)
+            ) {
+                $Hosts.Add($HostName)
+            }
+        }
+    }
+    return $Hosts.ToArray()
+}
+
+function Invoke-PipInstall {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [Parameter(Mandatory = $true)][string[]]$InstallArguments,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $PipArguments = @('-m', 'pip', 'install') + $InstallArguments
+    $FirstAttempt = Invoke-NativeCapture $Executable $PipArguments
+    if ($FirstAttempt.ExitCode -eq 0) {
+        return
+    }
+    if (-not (Test-PipSslFailure -Output $FirstAttempt.Output)) {
+        throw "$Label failed with exit code $($FirstAttempt.ExitCode). See the command output above."
+    }
+
+    $ConfigurationText = [System.Collections.Generic.List[string]]::new()
+    foreach ($ConfiguredValue in @(
+        $env:PIP_INDEX_URL,
+        $env:PIP_EXTRA_INDEX_URL,
+        $env:PIP_FIND_LINKS
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace($ConfiguredValue)) {
+            $ConfigurationText.Add($ConfiguredValue)
+        }
+    }
+    $PipConfiguration = Invoke-NativeCapture $Executable @('-m', 'pip', 'config', 'list') -HideOutput
+    if ($PipConfiguration.ExitCode -eq 0) {
+        foreach ($Line in $PipConfiguration.Output) {
+            $ConfigurationText.Add($Line)
+        }
+    }
+
+    $DetectionInput = @($FirstAttempt.Output) + @($ConfigurationText.ToArray())
+    $TrustedHosts = @(Get-PipTrustedHosts -Text $DetectionInput)
+    if ($TrustedHosts.Count -eq 0) {
+        throw (
+            "$Label failed because pip reported an SSL certificate error, but Bootstrap could " +
+            'not detect the repository host. Configure PIP_CERT or PIP_TRUSTED_HOST and rerun.'
+        )
+    }
+
+    Write-Warning (
+        "$Label encountered an SSL certificate error. Retrying once for detected host(s): " +
+        "$($TrustedHosts -join ', '). TLS certificate verification is disabled for those hosts " +
+        'during this retry.'
+    )
+    $RetryArguments = @($PipArguments)
+    foreach ($TrustedHost in $TrustedHosts) {
+        $RetryArguments += @('--trusted-host', $TrustedHost)
+    }
+    $RetryAttempt = Invoke-NativeCapture $Executable $RetryArguments
+    if ($RetryAttempt.ExitCode -ne 0) {
+        throw (
+            "$Label failed with exit code $($RetryAttempt.ExitCode) after the SSL fallback retry. " +
+            'See the command output above.'
+        )
+    }
+}
+
 function Test-SupportedPython {
     param(
         [Parameter(Mandatory = $true)][string]$Executable,
@@ -38,6 +161,11 @@ function Test-SupportedPython {
     } finally {
         $ErrorActionPreference = $PreviousPreference
     }
+}
+
+# Dot-sourcing exposes the helpers for deterministic regression tests without running Bootstrap.
+if ($MyInvocation.InvocationName -eq '.') {
+    return
 }
 
 $Required = @(
@@ -117,10 +245,10 @@ if (Test-Path -LiteralPath '.venv') {
     }
 }
 
-Invoke-Checked $Python @('-m', 'pip', 'install', '--upgrade', 'pip==25.2', 'setuptools==80.9.0', 'wheel==0.45.1') 'Build-tool installation'
-Invoke-Checked $Python @('-m', 'pip', 'install', '-c', 'requirements\constraints-py311-313.txt', '-e', '.[dev]') 'Project installation'
+Invoke-PipInstall $Python @('--upgrade', 'pip==25.2', 'setuptools==80.9.0', 'wheel==0.45.1') 'Build-tool installation'
+Invoke-PipInstall $Python @('-c', 'requirements\constraints-py311-313.txt', '-e', '.[dev]') 'Project installation'
 if (-not $SkipCompanyModels) {
-    Invoke-Checked $Python @('-m', 'pip', 'install', '-r', 'requirements\company-models-windows.txt') 'Company-model runtime installation'
+    Invoke-PipInstall $Python @('-r', 'requirements\company-models-windows.txt') 'Company-model runtime installation'
     # The current profile needs only the pinned YuNet asset from this downloader.
     # Legacy PPOCRv3/CRNN/YOLOX assets remain available for explicit historical replay.
     Invoke-Checked $Python @(
