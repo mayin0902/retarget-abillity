@@ -14,7 +14,7 @@
 | 理解保护分析 | `src/retarget_agent/analysis.py` | `ProtectionAnalyzerCore` |
 | 理解七算法装配 | `src/retarget_agent/methods/__init__.py` | `built_in_methods()` |
 | 理解自动评分 | `src/retarget_agent/evaluation.py` | `compute_proxy_metrics()` |
-| 理解 Rule 排名 | `src/retarget_agent/rule_selection.py` | `build_rule_decisions()` |
+| 理解 Rule 排名 | `src/retarget_agent/rule_selection.py` | `materialize_rule_decisions()` |
 | 理解/替换 AIGC API | `src/retarget_agent/providers/base.py` | `AIGCProvider.generate()` |
 | 理解完整可审计流程 | `src/retarget_agent/runner.py` | `GenerationRunner.run()` |
 
@@ -37,6 +37,57 @@ CLI / PowerShell / Review UI
 
 纯计算接口只接收 RGB 数组和参数并返回结果。文件接口负责输入冻结、Strategy 快照、指标
 JSON、Overlay、报告和恢复运行。CLI 只解析命令，不复制算法。
+
+### 2.1 先建立数据对象的关系
+
+```text
+TaskSpec
+  │  source + target
+  v
+AnalysisOutput（内存）
+  │  Runner持久化
+  v
+AnalysisArtifact
+  │
+  v
+CandidateRecord ──引用──> TransformRecord
+  │
+  v
+MetricBundle
+  │
+  v
+RuleDecisionRecord
+```
+
+| 对象 | 开发时把它理解成什么 | 重点字段 |
+|---|---|---|
+| `TaskSpec` | “哪张图要变成什么尺寸” | `source`、`target`、稳定 `task_id` |
+| `AnalysisOutput` | Analyzer 的内存返回 | `regions`、两个 Map、Analyzer ID、warning |
+| `AnalysisArtifact` | 同一分析结果的 Run 内不可变索引 | Map 的 `ArtifactRef`、配置 Hash |
+| `CandidateRecord` | 某个方法的生成事实 | 输出、状态、失败类型、Transform 引用、耗时 |
+| `TransformRecord` | 方法做过什么和风险多大 | `operations`、`risk_features`、warning |
+| `MetricBundle` | 某个 Evaluator 对一个候选的结构化测量 | Evaluator ID/版本、`metrics` |
+| `RuleDecisionRecord` | 一个 Task 的完整 Rule 排名 | `candidate_ranking`、Top1、失败候选、Strategy SHA |
+
+`AnalysisOutput` 和 `MethodOutput` 是运行时数据类；`AnalysisArtifact` 和 `CandidateRecord` 是文件
+流程中的 Pydantic 冻结记录。调试时先判断手里的是“内存返回”还是“落盘索引”，不要把 Map
+数组和指向 `.npy` 的 `ArtifactRef` 混用。
+
+### 2.2 常用函数的输入和输出
+
+| 函数 | 主要输入 | 主要输出 | 典型调用方 |
+|---|---|---|---|
+| `ProtectionAnalyzerCore.analyze()` | RGB、`TaskSpec`、可选 Guidance/Provided Regions | `AnalysisOutput` | Public API、Runner、Reference Scoring |
+| `CandidateMethod.generate()` | RGB、Task、Analysis Artifact、两个 Map、方法配置 | `MethodOutput` | `GenerationRunner`、Public Retarget API |
+| `generate_candidates()` | RGB、Target、场景、方法列表 | 多个 `RetargetResult` | 嵌入式调用、Smoke |
+| `score_pair()` | 原图 RGB、候选 RGB、可选 Transform/Strategy | `PairScoreResult` | 服务内评分、reference 文件评分 |
+| `compute_proxy_metrics()` | 两张图、两组 Region、Task、Transform | 原始指标字典 | Reference Scorer Adapter |
+| `apply_human_aligned_policy()` | 原始指标、场景、方法、Scoring Policy | 分数、惩罚和门禁后的新指标字典 | `human_aligned_proxy_v3` |
+| `materialize_rule_decisions()` | Run、Evaluation、Strategy | 每个 Task 的 `RuleDecisionRecord` | Evaluation、Agent、UI |
+| `score_image()` | 文件路径、模式、Strategy、输出目录 | `report.json/md`、Overlay、输入和快照 | CLI `score` |
+
+读调用链时先看接口的返回类型，再追具体实现。Runner 负责把这些返回转换成文件，不应在 CLI、
+UI 或报告代码里重新实现检测、评分或排序。
 
 ## 3. Public Retarget API
 
@@ -158,8 +209,21 @@ Public Scoring API 回退到包内同哈希的 `retarget@1.0.0` 快照。显式�
 | `score_image()` | 是 | 人工复核、问题复现、交接证据 |
 | CLI `score reference` | 是 | 命令行用户 |
 
-`score_image()` 内部调用 `score_pair()`，然后额外保存输入副本、检测框 Overlay、Strategy
-快照、`report.json` 和 `report.md`，不是另一套评分实现。
+`score_image()` 有两条路径：
+
+```text
+有 source（reference 模式）
+→ 调用 score_pair()
+→ 保存原图/候选比较指标
+
+没有 source（standalone 模式）
+→ 调用 Strategy 指定的 no-reference scorer
+→ 只保存单图技术指标
+```
+
+两条路径共享文件审计和报告输出层，都会保存输入副本、检测框 Overlay、Strategy 快照、
+`report.json` 和 `report.md`。standalone 不是 reference 的简化参数形式：它没有原图，不能计算
+OCR 召回、人物数量保持或内容语义损失。
 
 ## 7. Protection Analyzer 调用链
 

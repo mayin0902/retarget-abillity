@@ -14,6 +14,45 @@ Dataset
 选择位于 `evaluations/<id>/rule-decisions/`。Strategy 快照包含 Bundle、Scoring、Selection、
 Override、Prompt、Agent Skill 和独立 Knowledge，`snapshot.json` 保存逐文件 SHA-256。
 
+### 1.1 项目里有哪些版本
+
+这些版本各自冻结不同事实，不要求数字相同：
+
+| 类型 | 示例 | 代表什么 | 什么情况下改变 |
+|---|---|---|---|
+| Software | `0.8.1` | Python 代码、CLI/API 和工程行为 | 代码实现变化 |
+| Strategy | `retarget@1.0.0` | Scoring、Selection、Override、Agent Skill/Knowledge/Prompt | 策略内容变化 |
+| Dataset | `movie-visual-60-v1@1.0.0` | Source、Target 和 Task 定义 | 输入数据或任务变化 |
+| Generation Run | `movie60-square-v1-...` | 一次候选像素、Transform、耗时和配置快照 | 算法、输入或生成保护分析变化 |
+| Evaluation | `movie60-human-aligned-...` | 某 Strategy 对冻结 Run 的指标和 Rule 排名 | Scorer、权重、阈值、Gate 或 Selector 变化 |
+| Agent Run | `movie60-chinese-agent-v8-...` | 某模型/Profile/Agent Strategy 的一次建议 | 模型、Backend、Skill、Knowledge 或 Prompt 变化 |
+| Review | CSV 当前值 + JSONL 事件 | 人工等级、理由和修改历史 | 人工重新评价 |
+| Movie60 Release | `Movie60 v4` | 从上述事实中选出的冻结交付资产 | 数据或交付证据集合变化 |
+| GitHub Release | `v0.8.0` | 某次软件/资产发布入口 | 发布新的交付版本 |
+
+例如软件可以升级到 0.8.1，而仍继续物化 v0.8.0 中的 Movie60 v4；这表示代码有后续修复，
+不是数据自动升级。Strategy 也可以保持 `retarget@1.0.0`，因为纯工程或文档修改不改变评分与
+Agent 政策。
+
+### 1.2 三种常见修改对应什么新产物
+
+```text
+只把 A 阈值从 89 改成 85
+→ 新 Strategy + 新 Evaluation
+→ 不重新生成图片
+
+替换 Seam 算法实现
+→ 新 Generation Run + 新 Evaluation
+→ 如比较 Agent，再建新 Agent Run
+
+只替换 Agent API、Skill 或 Prompt
+→ 新 Agent Run
+→ 不重新生成候选，也不重算 Rule
+```
+
+Replay 的原则是复用上游冻结事实、创建新的下游 ID，而不是覆盖原目录。是否发布新 Release
+取决于这些新事实是否需要交付，不是每次 Replay 都要重新打包 2.3 GiB 数据。
+
 ## 2. 查看当前版本
 
 ```powershell
@@ -229,13 +268,34 @@ D:\review-case\
 7. 已有且 pin 正确的模型直接复用，不访问网络。
 
 准确的安全口径是：TLS 服务端身份校验在降级请求中关闭，但下载产物仍通过固定 SHA-256
-和字节数校验完整性与预期内容。这个例外不能用于没有内容 pin 的 pip、普通 API、Agent、
-AIGC 或任意用户 URL。
+和字节数校验完整性与预期内容。该机制只适用于 manifest 已固定内容 pin 的模型资源，不能
+照搬到普通 API、Agent、AIGC 或任意用户 URL。
 
 普通 Bootstrap 使用
 `datasets/analyzer_models_company_cpu_v2/download_manifest.csv`，其中只保留当前正式路线需要
 预下载的 YuNet。`datasets/analyzer_models_v1/model_manifest.csv` 中 PPOCRv3、CRNN、YOLOX
 仅供显式历史回放，不再由正常 Bootstrap 下载。
+
+### 14.1 pip 安装的独立 SSL 回退
+
+pip 依赖没有项目维护的逐文件 SHA/字节数 pin，因此 Bootstrap 的处理与固定模型下载不同：
+
+```text
+正常 pip install（保留证书校验）
+  ↓ 仅当输出明确包含 SSL certificate error
+从失败输出、PIP_INDEX_URL、PIP_EXTRA_INDEX_URL、PIP_FIND_LINKS
+和 pip config list 中提取网络主机
+  ↓
+同一安装命令临时增加 --trusted-host <host>，只重试一次
+```
+
+该回退统一用于 Build Tool、项目依赖和公司模型依赖三段 pip 安装。它不硬编码公司域名，不写
+`pip.ini`，不设置永久环境变量；本次 pip 进程结束后即失效。普通 `No matching distribution`、
+认证失败或依赖冲突不会触发重试。
+
+`--trusted-host` 仍使用 HTTPS 加密传输，但关闭所列主机的 TLS 服务端身份校验，且没有固定
+内容 Hash 提供与模型下载相同的最终校验。因此它是公司自签名证书环境的可用性降级，不应
+描述为“安全性不变”。如果有公司 CA，仍优先通过 `PIP_CERT` 或系统证书链解决。
 
 ## 15. 常见故障
 
@@ -247,5 +307,7 @@ AIGC 或任意用户 URL。
 - 端口占用：`review open <path> --port 8766`；
 - 固定 YuNet 下载出现证书错误：脚本会按 DEC-20260821-01 自动降级并验证内容 pin；非
   `SSLError`、非 allowlist Host 或 Hash/字节数不符仍会直接失败；
+- pip 安装出现自签名证书错误：Bootstrap 会识别当前索引主机并以 `--trusted-host` 临时重试
+  一次；若重试后仍为 `No matching distribution`，再检查公司镜像是否包含指定版本；
 - PP-OCRv6/D-FINE 第三方模型缓存受限：联系公司模型缓存负责人；不要把固定资源的 SSL
   例外扩展到无 pin 的第三方请求。
