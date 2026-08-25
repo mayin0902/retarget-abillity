@@ -19,6 +19,22 @@
 实现代码通过 `plugin_catalog.py` 的固定 ID 注册。Strategy 只能引用白名单 ID，不能从 YAML
 执行任意模块路径。
 
+### 1.1 所有扩展先回答八个问题
+
+开始写代码或 YAML 前，先在 PR 说明中回答：
+
+1. 现有接口为什么不能满足需求，是换参数、换模型，还是新增一种能力；
+2. 新实现遵守哪个 Protocol，输入输出是否保持兼容；
+3. 插件 ID、版本、模型 revision 和配置由哪里冻结；
+4. 失败、超时、缺测和降级分别怎样表示；
+5. 会改变哪些 Artifact：Analysis、Candidate、Metric、Rule Decision 还是 Agent Run；
+6. 哪些阶段必须重跑，哪些冻结像素可以复用；
+7. 最小单元测试和真实图片 Smoke 分别验证什么；
+8. 达到什么条件后才能进入默认 Profile 或切为 active Strategy。
+
+统一判断原则是：先让新输出成为可审计 evidence，再通过独立验证决定是否进入总分、Gate 或
+默认路由。能计算、能注册或单张 Smoke 成功，都不等于已经证明业务质量改善。
+
 ## 2. 替换或新增 AIGC API
 
 ### 2.1 稳定接口
@@ -190,6 +206,25 @@ Detector Suite 输入 RGB，输出 `tuple[RegionRecord, ...]`。步骤：
 检测器变化会改变内容保留证据，通常需要新 Evaluation；如果生成算法也使用新保护区域，还需
 重跑 Generation。
 
+### 3.1 什么时候应该新增 Detector Suite
+
+如果只是调整同一模型的阈值，应在新 Strategy/Profile 中配置；如果模型家族、预处理、标签
+映射或运行后端发生变化，应新增 Suite ID，让旧 Run 能继续找到旧实现。不要在
+`ProtectionAnalyzerCore` 中加入 `if company_xxx`，也不要让某个 Candidate Method 私下重新
+检测原图。
+
+新 Suite 必须明确：
+
+- `semantic_type` 怎样映射为 text、face、person、product、logo_candidate 或 object；
+- 一个 Detector 失败时是整个 Suite 失败，还是带 warning 返回其余可靠 Region；
+- 坐标是否基于 EXIF 校正后的 RGB，是否保证不越界；
+- `confidence`、`importance`、`tolerance` 和 `kind` 各自表达什么；
+- 模型缺失时 `required` 与可降级模式的行为。
+
+最小测试应覆盖固定 Fake 输出、空检测、越界框、单个子模型失败、缓存复用和 Region 序列化；
+真实 Smoke 至少包含简体中文文字、多人、人脸、商品/Logo 候选和无目标背景，并记录首次加载与
+热运行耗时。只有召回、误检、时延和下游回归均可接受，才考虑进入默认 Profile。
+
 ## 4. 新增 Scorer 或指标
 
 Reference Scorer 同时读取原图和候选证据；Standalone Scorer 只能看单张候选。新增指标时：
@@ -200,6 +235,25 @@ Reference Scorer 同时读取原图和候选证据；Standalone Scorer 只能看
 4. 在 Scorer Adapter 输出结构化值；
 5. 新 Strategy 再决定权重、阈值、惩罚和门禁；
 6. 用同一冻结 Run Replay，避免候选像素变化干扰比较。
+
+### 4.1 先定义指标契约，再决定是否进总分
+
+每个新指标至少写清：字段名、数据类型、理论范围、方向、绝对/相对原图、缺测条件、业务含义
+和已知误差。例如“文字美观度”不能用 0 同时表示“严重损坏”和“OCR 没检测到文字”。缺测必须
+是 `None`，由 `weighted_mean` 在已观测项上重新归一化。
+
+推荐分三步上线：
+
+```text
+Scorer 先输出新字段
+→ 在报告/UI中作为 evidence 观察
+→ Calibration 与独立 Validation 证明有效
+→ 新 Strategy 再赋权或加入 Gate
+```
+
+禁止在 `compute_proxy_metrics()` 中直接写人工等级，禁止按文件名/Task ID 调分，也不要用一个
+新增指标同时承担测量、惩罚和门禁。Reference 指标要测试原图与候选互换、合理 Crop、全局
+Warp、空纹理和 Detector 缺测；Standalone 指标不得暗示自己能判断内容丢失。
 
 ## 5. 迭代 Rule
 
@@ -216,6 +270,25 @@ Reference Scorer 同时读取原图和候选证据；Standalone Scorer 只能看
 
 旧 Strategy、旧 Evaluation、旧人工事件和 Run 内快照都不能覆盖。
 
+如果只是改变数值政策，不应修改 Python；如果需要新的排序语义或新的测量实现，才分别新增
+Selector/Scorer Adapter。Rule 修改的验收至少包含：Strategy schema/hash、旧 Strategy Replay、
+完整候选排列、失败候选仍在分母、Calibration 差异、Validation 一次性结果，以及代表性错误
+案例的人工解释。总体一致率上升但严重 C/D 召回下降，不能直接晋升。
+
+影响范围要按层判断：
+
+```text
+只改阈值/权重/Gate
+→ 新 Strategy + 新 Evaluation
+
+改 Reference Scorer 实现
+→ 新插件 ID + 新 Strategy + 新 Evaluation
+
+改 Rule Selector
+→ 新 Selector ID + 新 Strategy + 新 Evaluation
+→ 如需比较 Agent，再建新 Agent Run
+```
+
 ## 6. 迭代 Agent Skill、Knowledge 与 Prompt
 
 - Skill：行为原则、视觉优先级、允许覆盖 Rule 的条件、理由代码；
@@ -225,6 +298,18 @@ Reference Scorer 同时读取原图和候选证据；Standalone Scorer 只能看
 
 修改任一项都创建新版本和新 Agent Run ID。Agent 必须接收完整 Rule 排名和 Rule Top1；模型
 输出 Schema 失败、视觉证据矛盾或覆盖条件不成立时回退 Rule。机器建议不是人工金标。
+
+### 6.1 Agent 四层不要混改
+
+- 视觉判断原则变化改 Skill；
+- 新增可泛化正反例改 Knowledge；
+- 输入组织、Schema 或字段说明变化改 Prompt；
+- 模型服务、图片编码、超时和重试变化改 Backend Adapter/Profile。
+
+Knowledge 禁止出现 Task ID、文件名或“这张图必须选 Crop”一类逐图答案。Agent 的最小离线
+测试覆盖 Prompt 渲染、候选别名、完整排列修复、非法 JSON、缺项/重复项、Rule 回退和无密钥
+路径；真实 Replay 需要检查 Schema 有效率、超时、平均/P95 时延、Top1 变化、人工最佳命中和
+严重 C/D。Agent 自主权扩大必须通过独立人工 Validation，不能只看模型理由更长或置信度更高。
 
 ## 7. 新增重定向算法
 
@@ -237,6 +322,25 @@ Reference Scorer 同时读取原图和候选证据；Standalone Scorer 只能看
 5. 在 `built_in_methods()` 注册稳定 ID；
 6. 为多个目标比例、确定性和失败隔离写测试；
 7. 默认启用前使用真实图片评测。
+
+### 7.1 开发边界和验收
+
+不要在 Runner 中增加 `if method == "new_method"`，也不要复用旧方法 ID 悄悄替换像素实现。
+正确路径是：实现 `CandidateMethod`，在 `built_in_methods()` 注册稳定 ID，为默认 Profile 增加
+版本化 MethodConfig，并让 `TransformRecord` 记录该算法特有的操作和风险。
+
+新方法至少保证：
+
+- 输入数组不被原地修改，输出为目标尺寸 RGB `uint8`；
+- 同一输入、配置和 seed 结果确定；
+- 使用共享 Analysis，不私自重跑 Detector；
+- 超时、不可行和异常返回结构化失败，不能从七方法分母消失；
+- `UNSAFE` 仍保留图片和风险，`FAILED` 不伪造输出；
+- 多目标比例、极小图、无保护区、密集保护区和中途失败都有测试。
+
+真实 Smoke 应覆盖人物、多人关系、文字海报、商品/Logo、结构线和复杂背景，并同时查看像素、
+Transform、Rule 指标、耗时和峰值内存。新增方法改变候选像素，必须创建新 Generation Run；
+只有质量、失败率、时延和资源均达到约定标准后，才能加入默认七方法 Profile。
 
 ## 8. 提交前检查
 
