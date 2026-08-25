@@ -4,6 +4,100 @@
 函数开始看、数据怎样流动、只迁一部分代码需要什么”。算法原理和公式见
 [`ARCHITECTURE.md`](ARCHITECTURE.md)，安装与命令见 [`QUICKSTART.md`](QUICKSTART.md)。
 
+## `retarget-engine.exe` 是什么
+
+`retarget-engine.exe` 不是需要单独维护或编译的业务二进制文件。它是安装本项目时，Python
+打包工具根据 `pyproject.toml` 中的 console-script 配置生成到虚拟环境里的 Windows 命令行
+启动器：
+
+```toml
+[project.scripts]
+retarget-engine = "retarget_agent.cli:app"
+```
+
+调用关系是：
+
+```text
+.venv\Scripts\retarget-engine.exe
+        │  Python 安装器生成的启动器
+        v
+retarget_agent.cli:app
+        │  Typer 命令、参数解析和终端输出
+        v
+simple_workflow.py / service.py
+        │  应用用例和协作者装配
+        v
+runner.py / analysis.py / methods/ / evaluation.py / rule_selection.py
+        │  生成、检测、评分和选择
+        v
+Run 文件、候选图片、评分和决策
+```
+
+因此，`.exe` 只是调用 Python 代码的薄入口。不要直接修改、复制或反编译
+`.venv\Scripts\retarget-engine.exe`；真正需要维护的业务代码位于 `src/retarget_agent/`。
+`cli.py` 也只应负责接收参数、调用应用接口和展示结果，不应重新实现算法、评分或 Rule。
+
+### 四个名称分别指什么
+
+| 名称 | 含义 |
+|---|---|
+| `retarget-abillity` | 当前 GitHub 仓库名 |
+| `retarget-engine` | `pyproject.toml` 中的 Python distribution 名称，也是对外命令名 |
+| `retarget-engine.exe` | Windows `.venv` 中由安装器生成的 CLI launcher |
+| `retarget_agent` | `src/` 下的 Python package 和 import namespace |
+
+仓库名、distribution、命令和 import package 属于不同层次，名字不同不代表存在四套程序。
+
+### 修改功能时应该改哪里
+
+| 修改目标 | 首先查看的位置 | 说明 |
+|---|---|---|
+| 新增或调整 CLI 命令 | `src/retarget_agent/cli.py` | 只处理参数、调用和输出 |
+| 修改 `run image` 工作流 | `simple_workflow.py`、`service.py` | 先在应用层组织用例，再进入 Runner |
+| 修改完整可审计 Run | `runner.py` | 负责生成、落盘、快照和恢复 |
+| 修改保护分析、OCR 或检测 | `analysis.py`、`protection_detectors.py` | 保持 Detector 契约和证据可追踪 |
+| 修改 Crop、Seam、Mesh 等算法 | `methods/` | 每种方法保持统一 `CandidateMethod` 接口 |
+| 修改原始指标 | `evaluation.py` | 不在 CLI 或 UI 中重复计算 |
+| 修改人类偏好评分 | `human_aligned_scoring.py`、Strategy `scoring.yaml` | 区分评分实现与版本化参数 |
+| 修改 Rule 排名 | `rule_selection.py`、Strategy `selection.yaml` | 保留完整排名和门禁依据 |
+| 修改 Agent 行为 | `agents.py`、`agent_skill.py`、Strategy Skill/Knowledge/Prompt | 区分运行实现与不可变策略资产 |
+| 接入或替换 AIGC API | `providers/`、`generation_execution.py` | Provider 负责协议适配，执行层负责审计 |
+
+后文会继续说明这些模块的输入、输出和调用关系。
+
+### 改完 Python 代码需要重新生成 `.exe` 吗
+
+正常开发不需要。Windows Bootstrap 使用：
+
+```powershell
+pip install -e ".[dev]"
+```
+
+其中 `-e` 表示 editable install。虚拟环境中的启动器会导入当前仓库
+`src\retarget_agent\` 下的代码。因此修改 `crop.py`、`evaluation.py`、`service.py` 或
+`cli.py` 的命令内部逻辑后，保存文件并重新运行原命令即可使用新代码：
+
+```powershell
+.\.venv\Scripts\retarget-engine.exe run image ...
+```
+
+无需重新编译 `.exe`、重新打 Wheel 或重建 `.venv`。但“无需重装”不等于“无需测试”；修改后
+仍应运行对应单元测试、Smoke，并检查新的 Run 和策略快照。
+
+| 修改内容 | 是否需要重新安装或 Bootstrap |
+|---|---|
+| 算法、评分、Agent、Service 的 Python 实现 | 否 |
+| `cli.py` 中已有命令的内部逻辑 | 通常否 |
+| Strategy YAML、Prompt 或普通运行配置 | 否；新 Run 应保存新快照 |
+| `[project.scripts]` 中的命令名或入口 | 是；至少重新执行 `pip install -e .` |
+| `pyproject.toml` 或 requirements 中的依赖 | 是；建议重新执行 Bootstrap |
+| Python 解释器或虚拟环境发生变化 | 是 |
+| `.venv` 损坏、被删除或迁移到新电脑 | 是；应在目标电脑重新创建，不复制旧 `.venv` |
+
+修改 entry point 后重新安装，是为了让安装器重新生成 launcher；修改依赖后重新 Bootstrap，
+是为了让虚拟环境与仓库声明保持一致。`.venv` 包含解释器路径和平台相关二进制，不属于可移植
+交付物。
+
 ## 1. 先看这 9 个入口
 
 | 目标 | 首个文件 | 首个符号 |
