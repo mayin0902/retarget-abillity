@@ -25,7 +25,8 @@ Movie60 受控 Release ─┐
   local_data\movie60-review-current
 
 # 指定 Run
-.\.venv\Scripts\retarget-engine.exe review open runs\<run-id>
+# 将 your-run-id 替换为已有 Run 的目录名。
+.\.venv\Scripts\retarget-engine.exe review open "runs\your-run-id"
 
 # 最新 Run
 .\.venv\Scripts\retarget-engine.exe review latest
