@@ -36,7 +36,8 @@ powershell -ExecutionPolicy Bypass -File scripts\materialize_review.ps1
   --scene movie_poster
 
 # 打开指定 Run 或最近 Run
-.\.venv\Scripts\retarget-engine.exe review open runs\<run-id>
+# 将 your-run-id 替换为已有 Run 的目录名。
+.\.venv\Scripts\retarget-engine.exe review open "runs\your-run-id"
 .\.venv\Scripts\retarget-engine.exe review latest
 
 # 只比较一张原图和一张候选图
