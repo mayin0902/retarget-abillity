@@ -9,7 +9,7 @@
 [QUICKSTART](docs/QUICKSTART.md#0-先确认公司-pip-镜像)。
 
 ```powershell
-git clone <repository-url> retarget-abillity
+git clone https://github.com/mayin0902/retarget-abillity.git retarget-abillity
 cd retarget-abillity
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1 -PythonVersion 3.12
 .\.venv\Scripts\retarget-engine.exe doctor
